@@ -2,6 +2,7 @@
 generator.py — 填入出貨單模板，輸出 xlsx
 """
 
+import re
 import shutil
 from copy import copy
 from datetime import datetime
@@ -147,6 +148,55 @@ def _draw_invoice_section(ws, start_row, invoice_choice):
         tc2.font      = text_font
 
 
+def _clear_invoice_section(ws, start_row):
+    no_fill   = PatternFill(fill_type=None)
+    no_border = Border()
+    no_font   = Font()
+    no_align  = Alignment()
+
+    for rng in [f"F{start_row}:H{start_row+1}",
+                f"I{start_row}:J{start_row+1}",
+                f"A{start_row}:E{start_row+1}"]:
+        try:
+            ws.unmerge_cells(rng)
+        except Exception:
+            pass
+
+    for r in (start_row, start_row + 1):
+        for c in range(1, 11):
+            cell = ws.cell(row=r, column=c)
+            if isinstance(cell, MergedCell):
+                continue
+            cell.value     = None
+            cell.fill      = no_fill
+            cell.border    = no_border
+            cell.font      = no_font
+            cell.alignment = no_align
+
+
+def _norm_text(s):
+    return re.sub(r'[\s\u3000]+', '', str(s or ''))
+
+
+def _insert_invoice_flag_below(ws, target_text, symbol='□', label='發票隨貨'):
+    norm_target = _norm_text(target_text)
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell, MergedCell) or cell.value is None:
+                continue
+            if _norm_text(cell.value) == norm_target:
+                dst_row = cell.row + 1
+                dst = ws.cell(row=dst_row, column=cell.column)
+                while isinstance(dst, MergedCell):
+                    dst_row += 1
+                    dst = ws.cell(row=dst_row, column=cell.column)
+                dst.value = f"{symbol}{label}"
+                dst.alignment = Alignment(horizontal='left', vertical='center')
+                if cell.has_style:
+                    dst.font = copy(cell.font)
+                return
+
+
 def generate(data, extra, out_filename=""):
     OUTPUT_DIR.mkdir(exist_ok=True)
     tmp = OUTPUT_DIR / "_working.xlsx"
@@ -205,17 +255,13 @@ def generate(data, extra, out_filename=""):
 
     _safe_write(ws, operator_row, 3, extra.get("operator", ""))
 
-    # ── 5. 發票方框 ────────────────────────────────────────────
+    # ── 5. 發票欄位清空，不顯示發票選項 ────────────────────────────
     invoice_row = 12 + n_extra
-    for rng in [f"F{invoice_row}:H{invoice_row+1}",
-                f"I{invoice_row}:J{invoice_row+1}",
-                f"A{invoice_row}:E{invoice_row+1}"]:
-        try:
-            ws.unmerge_cells(rng)
-        except Exception:
-            pass
-
-    _draw_invoice_section(ws, invoice_row, extra.get("invoice_choice", ""))
+    _clear_invoice_section(ws, invoice_row)
+    _insert_invoice_flag_below(
+        ws,
+        "※第一聯(白聯)為立善留存；第二聯(紅聯)為貨運公司留存；第三聯(黃聯)為客戶收執聯"
+    )
 
     # ── 6. 存檔 ────────────────────────────────────────────────
     if not out_filename:
