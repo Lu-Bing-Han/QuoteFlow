@@ -178,7 +178,14 @@ def _norm_text(s):
     return re.sub(r'[\s\u3000]+', '', str(s or ''))
 
 
-def _insert_invoice_flag_below(ws, target_text, symbol='□', label='發票隨貨'):
+def _insert_invoice_flag_below(ws, target_text, invoice_choice='尚未確認'):
+    if invoice_choice == '隨貨':
+        sym1, sym2 = '■', '□'
+    elif invoice_choice == '直寄':
+        sym1, sym2 = '□', '■'
+    else:
+        sym1, sym2 = '□', '□'
+
     norm_target = _norm_text(target_text)
     for row in ws.iter_rows():
         for cell in row:
@@ -186,14 +193,23 @@ def _insert_invoice_flag_below(ws, target_text, symbol='□', label='發票隨�
                 continue
             if _norm_text(cell.value) == norm_target:
                 dst_row = cell.row + 1
-                dst = ws.cell(row=dst_row, column=cell.column)
+                dst_col = cell.column + 8
+                dst = ws.cell(row=dst_row, column=dst_col)
                 while isinstance(dst, MergedCell):
                     dst_row += 1
-                    dst = ws.cell(row=dst_row, column=cell.column)
-                dst.value = f"{symbol}{label}"
+                    dst = ws.cell(row=dst_row, column=dst_col)
+                dst.value = f"{sym1}發票隨貨"
                 dst.alignment = Alignment(horizontal='left', vertical='center')
                 if cell.has_style:
                     dst.font = copy(cell.font)
+
+                dst2 = ws.cell(row=dst_row, column=dst_col + 1)
+                if isinstance(dst2, MergedCell):
+                    dst2 = ws.cell(row=dst_row + 1, column=dst_col + 1)
+                dst2.value = f"{sym2}發票直寄"
+                dst2.alignment = Alignment(horizontal='left', vertical='center')
+                if cell.has_style:
+                    dst2.font = copy(cell.font)
                 return
 
 
@@ -260,7 +276,8 @@ def generate(data, extra, out_filename=""):
     _clear_invoice_section(ws, invoice_row)
     _insert_invoice_flag_below(
         ws,
-        "※第一聯(白聯)為立善留存；第二聯(紅聯)為貨運公司留存；第三聯(黃聯)為客戶收執聯"
+        "※第一聯(白聯)為立善留存；第二聯(紅聯)為貨運公司留存；第三聯(黃聯)為客戶收執聯",
+        extra.get("invoice_choice", "尚未確認")
     )
 
     # ── 6. 存檔 ────────────────────────────────────────────────
