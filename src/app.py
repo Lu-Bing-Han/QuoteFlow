@@ -121,8 +121,10 @@ class App(tk.Tk):
                  anchor="w", font=FONT).grid(row=4, column=0, sticky="w", **PAD)
         inv_f = tk.Frame(rf, bg="#f4f6f8")
         inv_f.grid(row=4, column=1, sticky="w", **PAD)
-        self._invoice_var = tk.StringVar(value="隨貨")
-        for lbl, val in [("發票隨貨", "隨貨"), ("發票直寄", "直寄")]:
+        self._invoice_var = tk.StringVar(value="尚未確認")
+        for lbl, val in [("發票尚未確認", "尚未確認"),
+                         ("發票隨貨", "隨貨"),
+                         ("發票直寄", "直寄")]:
             tk.Radiobutton(inv_f, text=lbl, variable=self._invoice_var,
                            value=val, bg="#f4f6f8", font=FONT,
                            activebackground="#f4f6f8").pack(side="left", padx=(0,8))
