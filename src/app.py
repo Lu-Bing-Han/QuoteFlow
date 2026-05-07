@@ -1,5 +1,5 @@
 """
-app.py  —  報價單 → 出貨單 / 驗機單 轉換工具 (Tkinter GUI)
+app.py  —  報價單 → 出貨單 / 驗機單 / 維修單 轉換工具 (Tkinter GUI)
 """
 
 import json, os, subprocess, sys, tkinter as tk
@@ -10,7 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from parser import parse
 from generator import generate
-from generator_inspection import generate_inspection  # ← 新增
+from generator_inspection import generate_inspection
+from generator_fix import generate_fix
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 
@@ -34,7 +35,7 @@ class App(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#f4f6f8")
         self._parsed_data = None
-        self._src_path = None          # ← 新增
+        self._src_path = None
         self._config = _load_config()
         self._build_ui()
 
@@ -159,17 +160,16 @@ class App(tk.Tk):
                   bg="#c0392b", fg="white", relief="flat",
                   font=FONT, padx=10, pady=3).pack(side="left")
 
-        # ── 底部按鈕區 ──
         bot = tk.Frame(self, bg="#f4f6f8", pady=10)
         bot.pack(fill="x")
-        tk.Button(bot, text="⬇  生成出貨單 .xlsx", command=self._generate,
-                  bg="#1a5276", fg="white",
-                  font=("Microsoft JhengHei", 13, "bold"),
-                  relief="flat", padx=24, pady=8).pack()
-        tk.Button(bot, text="🔍  生成驗機單 .xlsx", command=self._generate_inspection,
-                  bg="#6c3483", fg="white",
-                  font=("Microsoft JhengHei", 13, "bold"),
-                  relief="flat", padx=24, pady=8).pack(pady=(6, 0))   # ← 新增
+        for text, cmd, color in [
+            ("⬇  生成出貨單", self._generate,             "#1a5276"),
+            ("🔍  生成驗機單", self._generate_inspection,  "#6c3483"),
+            ("🔧  生成維修單", self._generate_fix,         "#d68910"),
+        ]:
+            tk.Button(bot, text=text, command=cmd, bg=color, fg="white",
+                      font=("Microsoft JhengHei", 13, "bold"),
+                      relief="flat", padx=16, pady=8).pack(side="left", expand=True, fill="x", padx=6)
 
     # ── 開檔 ──────────────────────────────────────────────────
     def _open_file(self):
@@ -178,7 +178,7 @@ class App(tk.Tk):
             filetypes=[("Excel 檔案", "*.xlsx *.xls"), ("所有檔案", "*.*")])
         if not path:
             return
-        self._src_path = path          # ← 新增
+        self._src_path = path
         try:
             data = parse(path)
             self._parsed_data = data
@@ -336,7 +336,7 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror("生成失敗", str(e))
 
-    # ── 生成驗機單 ────────────────────────────────────────────   ← 新增
+    # ── 生成驗機單 ────────────────────────────────────────────
     def _generate_inspection(self):
         if not self._parsed_data or not self._src_path:
             messagebox.showwarning("尚未載入", "請先選擇並載入報價單")
@@ -345,6 +345,42 @@ class App(tk.Tk):
             out_path = generate_inspection(self._src_path, self._parsed_data)
             ans = messagebox.askyesno("生成成功",
                 f"驗機單已儲存至：\n{out_path}\n\n是否立即開啟？")
+            if ans:
+                if sys.platform == "win32":
+                    os.startfile(out_path)
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", str(out_path)])
+                else:
+                    subprocess.run(["xdg-open", str(out_path)])
+        except Exception as e:
+            messagebox.showerror("生成失敗", str(e))
+
+    # ── 生成維修單 ────────────────────────────────────────────
+    def _generate_fix(self):
+        if not self._parsed_data:
+            messagebox.showwarning("尚未載入", "請先選擇並載入報價單")
+            return
+
+        items = []
+        for i, rid in enumerate(self._tree.get_children()):
+            v = self._tree.item(rid, "values")
+            items.append({"seq": i+1, "name": v[1],
+                          "qty": v[2], "unit": v[3],
+                          "unit_price": v[4], "subtotal": v[5]})
+        self._parsed_data["items"] = items
+
+        extra = {
+            "ship_date":      self._fill_vars["ship_date"].get(),
+            "sale_no":        self._fill_vars["sale_no"].get(),
+            "note":           self._fill_vars["note"].get(),
+            "operator":       self._operator_var.get(),
+            "invoice_choice": self._invoice_var.get(),
+        }
+
+        try:
+            out_path = generate_fix(self._parsed_data, extra)
+            ans = messagebox.askyesno("生成成功",
+                f"維修單已儲存至：\n{out_path}\n\n是否立即開啟？")
             if ans:
                 if sys.platform == "win32":
                     os.startfile(out_path)
