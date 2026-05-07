@@ -342,16 +342,26 @@ class App(tk.Tk):
             messagebox.showwarning("尚未載入", "請先選擇並載入報價單")
             return
         try:
-            out_path = generate_inspection(self._src_path, self._parsed_data)
-            ans = messagebox.askyesno("生成成功",
-                f"驗機單已儲存至：\n{out_path}\n\n是否立即開啟？")
+            excel_path, word_paths = generate_inspection(self._src_path, self._parsed_data)
+
+            msg = f"驗機單 Excel 已儲存至：\n{excel_path}"
+            if word_paths:
+                msg += f"\n\n驗機單 Word（共 {len(word_paths)} 份）："
+                for wp in word_paths:
+                    msg += f"\n  {wp.name}"
+
+            ans = messagebox.askyesno("生成成功", msg + "\n\n是否立即開啟？")
             if ans:
-                if sys.platform == "win32":
-                    os.startfile(out_path)
-                elif sys.platform == "darwin":
-                    subprocess.run(["open", str(out_path)])
-                else:
-                    subprocess.run(["xdg-open", str(out_path)])
+                def _open(p):
+                    if sys.platform == "win32":
+                        os.startfile(p)
+                    elif sys.platform == "darwin":
+                        subprocess.run(["open", str(p)])
+                    else:
+                        subprocess.run(["xdg-open", str(p)])
+                _open(excel_path)
+                for wp in word_paths:
+                    _open(wp)
         except Exception as e:
             messagebox.showerror("生成失敗", str(e))
 
