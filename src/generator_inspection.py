@@ -110,23 +110,61 @@ def generate_inspection(src_path: str, data: dict) -> Path:
                     if not isinstance(t, MergedCell) and t.value:
                         t.value = None
                         break
+    
+    # ── ④ 動態找「單價」/「小計」欄，全欄歸零；合計類關鍵字歸零 ──
+    def _is_numeric(v):
+        if isinstance(v, (int, float)):
+            return True
+        if isinstance(v, str):
+            stripped = re.sub(r'[NT$,\s]', '', v).replace('.', '', 1).lstrip('-')
+            return bool(stripped) and stripped.isdigit()
+        return False
 
-    # ── ④ 單價(col8)/小計(col9) 全欄掃描歸零；合計類關鍵字歸零 ──
+    def _should_clear(v):
+        """數值或公式都要清除"""
+        if v is None:
+            return False
+        if isinstance(v, (int, float)):
+            return True
+        if isinstance(v, str):
+            if v.startswith('='):
+                return True
+            return _is_numeric(v)
+        return False
+
+    # 掃描表頭，動態定位「單價」「小計」欄號
+    price_col    = 8   # 預設 fallback
+    subtotal_col = 9
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell, MergedCell) or not cell.value:
+                continue
+            text = _norm(str(cell.value))
+            if text == "單價" and price_col == 8:
+                price_col = cell.column
+            elif text in ("小計", "金額") and subtotal_col == 9:
+                subtotal_col = cell.column
+        if price_col != 8 or subtotal_col != 9:
+            break   # 找到後就停
+
     for row in ws.iter_rows():
         rn = row[0].row
 
-        # col 8（單價）→ 有數值一律清空；col 9（小計）→ 有數值一律歸 0
-        for col, empty_val in ((8, None), (9, 0)):
-            c = ws.cell(row=rn, column=col)
-            if not isinstance(c, MergedCell) and isinstance(c.value, (int, float)):
-                c.value = empty_val
+        # 單價欄 → 清空
+        cp = ws.cell(row=rn, column=price_col)
+        if not isinstance(cp, MergedCell) and _should_clear(cp.value):
+            cp.value = None
 
-        # 掃描此列：找合計類關鍵字，將同列所有數值歸零
+        # 小計欄 → 歸 0
+        cs = ws.cell(row=rn, column=subtotal_col)
+        if not isinstance(cs, MergedCell) and _should_clear(cs.value):
+            cs.value = 0
+
+        # 掃描此列：找合計類關鍵字，將同列所有數值/公式歸零
         for cell in row:
             if isinstance(cell, MergedCell) or not cell.value:
                 continue
             if any(kw in _norm(str(cell.value)) for kw in ZERO_KW):
-                # 往右掃 col 2~10，找到數值就歸零（不提早 break，全部清）
                 for c in range(2, 11):
                     t = ws.cell(row=rn, column=c)
                     if isinstance(t, MergedCell) or t.value is None:
