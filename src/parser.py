@@ -97,6 +97,7 @@ def _parse_items(ws, header_row: int) -> list:
 
             current = {
                 "seq":        int(a),
+                "part_no":    _cell_str(ws.cell(row=row_idx, column=2)),
                 "name":       name,
                 "qty":        ws.cell(row=row_idx, column=6).value or 0,
                 "unit":       _cell_str(ws.cell(row=row_idx, column=7)),

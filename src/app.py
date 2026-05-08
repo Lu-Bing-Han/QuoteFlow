@@ -190,9 +190,10 @@ class App(tk.Tk):
                 self._tree.delete(row_id)
             for item in data["items"]:
                 self._tree.insert("", "end", values=(
-                    item["seq"], item["name"].replace("\n", " "),
+                    item["seq"], item.get("part_no", ""),
                     item["qty"], item["unit"],
-                    item["unit_price"], item["subtotal"]))
+                    "", ""))
+            self._fill_vars["sale_no"].set(h.get("quote_no", ""))
         except Exception as e:
             messagebox.showerror("讀取失敗", f"無法解析報價單：\n{e}")
 
@@ -228,11 +229,12 @@ class App(tk.Tk):
             vals = list(self._tree.item(item_id, "values"))
             new  = var.get()
             if col_name in ("seq", "qty", "unit_price", "subtotal"):
-                try:
-                    new = float(new) if "." in new else int(new)
-                except ValueError:
-                    messagebox.showwarning("格式錯誤", "此欄位請輸入數字", parent=pop)
-                    return
+                if new.strip():
+                    try:
+                        new = float(new) if "." in new else int(new)
+                    except ValueError:
+                        messagebox.showwarning("格式錯誤", "此欄位請輸入數字", parent=pop)
+                        return
             vals[col_idx] = new
             if col_name in ("qty", "unit_price"):
                 try:
@@ -300,6 +302,13 @@ class App(tk.Tk):
             self._operator_cb["values"] = self._config["operators"]
             self._operator_var.set(self._config["operators"][0])
 
+    @staticmethod
+    def _to_num(s, default=0):
+        try:
+            return float(s) if "." in str(s) else int(s)
+        except (ValueError, TypeError):
+            return default
+
     # ── 生成出貨單 ────────────────────────────────────────────
     def _generate(self):
         if not self._parsed_data:
@@ -310,8 +319,9 @@ class App(tk.Tk):
         for i, rid in enumerate(self._tree.get_children()):
             v = self._tree.item(rid, "values")
             items.append({"seq": i+1, "name": v[1],
-                          "qty": v[2], "unit": v[3],
-                          "unit_price": v[4], "subtotal": v[5]})
+                          "qty": self._to_num(v[2]), "unit": v[3],
+                          "unit_price": self._to_num(v[4]),
+                          "subtotal": self._to_num(v[5])})
         self._parsed_data["items"] = items
 
         extra = {
@@ -375,8 +385,9 @@ class App(tk.Tk):
         for i, rid in enumerate(self._tree.get_children()):
             v = self._tree.item(rid, "values")
             items.append({"seq": i+1, "name": v[1],
-                          "qty": v[2], "unit": v[3],
-                          "unit_price": v[4], "subtotal": v[5]})
+                          "qty": self._to_num(v[2]), "unit": v[3],
+                          "unit_price": self._to_num(v[4]),
+                          "subtotal": self._to_num(v[5])})
         self._parsed_data["items"] = items
 
         extra = {
