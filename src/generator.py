@@ -31,6 +31,7 @@ def _safe_write(ws, row, col, value):
         cell.value = value
 
 
+
 def _copy_row_style(ws, src_row, dst_row):
     for col in range(1, 11):
         src = ws.cell(row=src_row, column=col)
@@ -71,6 +72,41 @@ def _shift_footer_merges(ws, n_extra):
         )
 
 
+def _write_items_compact(ws, items):
+    """1~3 個品項：全部塞進 ITEM_ROW 那一列，多品項以兩個換行分隔。"""
+    from openpyxl.styles import Alignment
+    sep  = "\n\n"
+    wrap = Alignment(wrap_text=True, vertical="top", horizontal="center")
+    wrap_left = Alignment(wrap_text=True, vertical="top", horizontal="left")
+
+    def _join(values):
+        return sep.join(str(v) if v not in (None, "") else "" for v in values)
+
+    r = ITEM_ROW
+    seqs      = [str(i + 1) for i in range(len(items))]
+    names     = [item["name"].replace("\n", " ") for item in items]
+    qtys      = [item["qty"]        for item in items]
+    units     = [item["unit"]       for item in items]
+    for col, vals, al in [
+        (1, seqs,   wrap),
+        (3, names,  wrap_left),
+        (6, qtys,   wrap),
+        (7, units,  wrap),
+    ]:
+        cell = ws.cell(row=r, column=col)
+        if not isinstance(cell, MergedCell):
+            cell.value     = _join(vals)
+            cell.alignment = al
+
+    # 清空模板預設的 0
+    for col in (8, 9):
+        cell = ws.cell(row=r, column=col)
+        if not isinstance(cell, MergedCell):
+            cell.value = None
+
+    pass  # preserve template row height
+
+
 def _append_invoice_to_footer(ws, invoice_choice):
     if invoice_choice == '隨貨':
         suffix = '    ■發票隨貨 □發票直寄'
@@ -89,6 +125,23 @@ def _append_invoice_to_footer(ws, invoice_choice):
 
 
 def generate(data, extra, out_filename=""):
+    items = data["items"]
+    n     = len(items)
+
+    # 超過 3 個品項：每 3 個一份，依序遞迴生成
+    if n > 3:
+        h        = data["header"]
+        customer = h.get("customer", "客戶")
+        date_tag = extra.get("ship_date", "").replace("/", "") or datetime.today().strftime("%Y%m%d")
+        base     = out_filename or f"出貨單-{customer}-{date_tag}.xlsx"
+        stem     = Path(base).stem
+        chunks   = [items[i:i+3] for i in range(0, n, 3)]
+        paths    = []
+        for idx, chunk in enumerate(chunks):
+            fn = base if idx == 0 else f"{stem}-{idx + 1}.xlsx"
+            paths.append(generate(dict(data, items=chunk), extra, fn))
+        return paths
+
     OUTPUT_DIR.mkdir(exist_ok=True)
     tmp = OUTPUT_DIR / "_working.xlsx"
     shutil.copy(TEMPLATE_PATH, tmp)
@@ -96,9 +149,7 @@ def generate(data, extra, out_filename=""):
     wb = openpyxl.load_workbook(tmp)
     ws = wb.active
 
-    h     = data["header"]
-    items = data["items"]
-    n     = len(items)
+    h       = data["header"]
     n_extra = n - 1   # 需插入的額外列數
 
     # ── 1. 固定表頭 ───────────────────────────────────────────
@@ -116,28 +167,31 @@ def generate(data, extra, out_filename=""):
     if tax_id:
         ws["F6"] = "統一編號：" + tax_id
 
-    # ── 2. 多品項時：先移動 footer 合併格，再 insert ──────────
-    if n_extra > 0:
-        _shift_footer_merges(ws, n_extra)
-        ws.insert_rows(FOOTER_START, amount=n_extra)
-
-    # ── 3. 寫入各品項 ─────────────────────────────────────────
-    for i, item in enumerate(items):
-        r = ITEM_ROW + i
-        if i > 0:
-            ws.merge_cells(f"A{r}:B{r}")
-            ws.merge_cells(f"C{r}:E{r}")
-            _copy_row_style(ws, ITEM_ROW, r)
-
-        _safe_write(ws, r, 1, i + 1)
-        _safe_write(ws, r, 3, item["name"].replace("\n", " "))
-        _safe_write(ws, r, 6, item["qty"])
-        _safe_write(ws, r, 7, item["unit"])
-        _safe_write(ws, r, 8, item["unit_price"])
-        _safe_write(ws, r, 9, item["subtotal"])
+    # ── 2 & 3. 品項寫入 ───────────────────────────────────────
+    if n <= 3:
+        # 緊湊模式：全部塞進 ITEM_ROW，不插列
+        _write_items_compact(ws, items)
+        note_row = ITEM_ROW + 1
+    else:
+        # 一般模式：每個品項佔一列
+        if n_extra > 0:
+            _shift_footer_merges(ws, n_extra)
+            ws.insert_rows(FOOTER_START, amount=n_extra)
+        for i, item in enumerate(items):
+            r = ITEM_ROW + i
+            if i > 0:
+                ws.merge_cells(f"A{r}:B{r}")
+                ws.merge_cells(f"C{r}:E{r}")
+                _copy_row_style(ws, ITEM_ROW, r)
+            _safe_write(ws, r, 1, i + 1)
+            _safe_write(ws, r, 3, item["name"].replace("\n", " "))
+            _safe_write(ws, r, 6, item["qty"])
+            _safe_write(ws, r, 7, item["unit"])
+            _safe_write(ws, r, 8, item["unit_price"])
+            _safe_write(ws, r, 9, item["subtotal"])
+        note_row = ITEM_ROW + n
 
     # ── 4. Footer 補填 ─────────────────────────────────────────
-    note_row     = ITEM_ROW + n
     operator_row = note_row + 1
 
     note_text = extra.get("note", "").strip()
