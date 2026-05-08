@@ -278,21 +278,20 @@ def _generate_word_from_template(part_no: str, red_lines: list,
 
     ref_p = kaizao_para._p
 
-    # ── ③ 插入紅色 ※ 文字（逆序 addnext → 正序排列）────────────
+    # ── ③ 插入紅色 ※ 文字（逆序 addnext → 正序排列，固定 28pt）──
     for line in reversed(red_lines):
-        new_p   = OxmlElement('w:p')
-        new_r   = OxmlElement('w:r')
-        new_rPr = OxmlElement('w:rPr')
+        new_p    = OxmlElement('w:p')
+        new_r    = OxmlElement('w:r')
+        new_rPr  = OxmlElement('w:rPr')
         color_el = OxmlElement('w:color')
         color_el.set(qn('w:val'), 'C0392B')
         new_rPr.append(color_el)
-        if kaizao_para.runs and kaizao_para.runs[0].font.size:
-            sz_el = OxmlElement('w:sz')
-            sz_el.set(qn('w:val'), str(int(kaizao_para.runs[0].font.size / 12700)))
-            new_rPr.append(sz_el)
+        sz_el = OxmlElement('w:sz')
+        sz_el.set(qn('w:val'), '52')        # 52 half-pt = 26pt
+        new_rPr.append(sz_el)
         new_r.append(new_rPr)
         new_t = OxmlElement('w:t')
-        new_t.text = line
+        new_t.text = line.replace('※', '□', 1)
         new_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
         new_r.append(new_t)
         new_p.append(new_r)
@@ -315,6 +314,26 @@ def _generate_word_from_template(part_no: str, red_lines: list,
     dim_r.append(dim_t)
     dim_p.append(dim_r)
     ref_p.addnext(dim_p)
+
+    # ── ⑤ 調整緩衝空行，讓「插入項目 + size-28 空行」維持 8 行 ──────
+    # 緩衝區共 10 行：前 8 行 size-28（可調整）、後 2 行保留不動
+    # 插入了 1 行長寬高(28pt) + N 行 ※(28pt)，需從前 8 行移除 N+1 行
+    n_to_remove = min(len(red_lines) + 1, 8)
+
+    in_zone        = False
+    buffer_empties = []
+    for para in doc.paragraphs:
+        if kaizao_para is not None and para._p is kaizao_para._p:
+            in_zone = True
+            continue
+        if '主管簽核' in para.text:
+            break
+        if in_zone and not para.text.strip():
+            buffer_empties.append(para)
+
+    # 只移除前 8 行（size-28 群），後 2 行（buffer_empties[8:]）保留
+    for para in buffer_empties[:n_to_remove]:
+        para._p.getparent().remove(para._p)
 
     doc.save(str(out_path))
     return out_path
