@@ -22,10 +22,8 @@ from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
 from openpyxl.cell import MergedCell
-from openpyxl.drawing.image import Image as XLImage
 
 OUTPUT_DIR    = Path(__file__).parent.parent / "output"
-LOGO_PATH     = Path(__file__).parent.parent / "template" / "logo.png"
 WORD_TEMPLATE = Path(__file__).parent.parent / "template" / "template.docx"
 TITLE_RE      = re.compile(r'報[\s　]*價[\s　]*單')
 CLEAR_KW      = {"電話", "傳真", "聯絡人", "統一編號", "聯絡地址", "EMAIL"}
@@ -448,25 +446,28 @@ def generate_inspection(src_path: str, data: dict):
     for row in ws.iter_rows():
         rn = row[0].row
 
-        cp = ws.cell(row=rn, column=price_col)
-        if not isinstance(cp, MergedCell) and _should_clear(cp.value):
-            cp.value = None
+        is_total_row = any(
+            not isinstance(cell, MergedCell) and cell.value and
+            any(kw in _norm(str(cell.value)) for kw in ZERO_KW)
+            for cell in row
+        )
 
-        cs = ws.cell(row=rn, column=subtotal_col)
-        if not isinstance(cs, MergedCell) and _should_clear(cs.value):
-            cs.value = 0
+        if is_total_row:
+            for c in range(2, 12):
+                t = ws.cell(row=rn, column=c)
+                if isinstance(t, MergedCell) or t.value is None:
+                    continue
+                new_v = _zero(t.value)
+                if new_v != t.value:
+                    t.value = new_v
+        else:
+            cp = ws.cell(row=rn, column=price_col)
+            if not isinstance(cp, MergedCell) and _should_clear(cp.value):
+                cp.value = None
 
-        for cell in row:
-            if isinstance(cell, MergedCell) or not cell.value:
-                continue
-            if any(kw in _norm(str(cell.value)) for kw in ZERO_KW):
-                for c in range(2, 11):
-                    t = ws.cell(row=rn, column=c)
-                    if isinstance(t, MergedCell) or t.value is None:
-                        continue
-                    new_v = _zero(t.value)
-                    if new_v != t.value:
-                        t.value = new_v
+            cs = ws.cell(row=rn, column=subtotal_col)
+            if not isinstance(cs, MergedCell) and _should_clear(cs.value):
+                cs.value = 0
 
     # ── ⑤ 掃描品項行（seq, part_no, row_num）────────────────────
     item_header_row = -1
@@ -491,13 +492,7 @@ def generate_inspection(src_path: str, data: dict):
                 part_no = _cell_str(ws.cell(row=r, column=2))
                 item_rows.append((int(a_str), part_no, r))
 
-    # ── ⑥ 插入 Logo ───────────────────────────────────────────────
-    if LOGO_PATH.exists():
-        img = XLImage(str(LOGO_PATH))
-        img.anchor = "A1"
-        ws.add_image(img)
-
-    # ── ⑦ 「訂購請簽章回傳」下方加底線 ──────────────────────────
+    # ── ⑥ 「訂購請簽章回傳」下方加底線 ──────────────────────────
     from openpyxl.styles import Side
     sig_row = -1
     for row in ws.iter_rows():
