@@ -23,8 +23,8 @@ from xml.etree import ElementTree as ET
 from openpyxl import load_workbook
 from openpyxl.cell import MergedCell
 
-OUTPUT_DIR    = Path(__file__).parent.parent / "output"
-WORD_TEMPLATE = Path(__file__).parent.parent / "template" / "template.docx"
+from _paths import TEMPLATE_DIR, OUTPUT_DIR
+WORD_TEMPLATE = TEMPLATE_DIR / "template.docx"
 TITLE_RE      = re.compile(r'報[\s　]*價[\s　]*單')
 CLEAR_KW      = {"電話", "傳真", "聯絡人", "統一編號", "聯絡地址", "EMAIL"}
 ZERO_KW       = {"營業稅", "應收總金額", "合計"}

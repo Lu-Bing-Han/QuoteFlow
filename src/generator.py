@@ -10,8 +10,8 @@ from pathlib import Path
 import openpyxl
 from openpyxl.cell import MergedCell
 
-TEMPLATE_PATH = Path(__file__).parent.parent / "template" / "template.xlsx"
-OUTPUT_DIR    = Path(__file__).parent.parent / "output"
+from _paths import TEMPLATE_DIR, OUTPUT_DIR
+TEMPLATE_PATH = TEMPLATE_DIR / "template.xlsx"
 
 ITEM_ROW     = 10
 FOOTER_START = 11   # 附註列（insert 插入點，也是 footer 合併格的起始列）
