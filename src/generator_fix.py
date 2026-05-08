@@ -65,7 +65,7 @@ def _shift_footer_merges(ws, n_extra):
 def _write_items_compact(ws, items):
     """1~3 個品項：全部塞進 ITEM_ROW 那一列，多品項以兩個換行分隔。"""
     from openpyxl.styles import Alignment
-    sep  = "\n"
+    sep  = "\n\n"
     wrap = Alignment(wrap_text=True, vertical="top", horizontal="center")
     wrap_left = Alignment(wrap_text=True, vertical="top", horizontal="left")
 
@@ -115,6 +115,23 @@ def _append_invoice_to_footer(ws, invoice_choice):
 
 
 def generate_fix(data, extra, out_filename=""):
+    items = data["items"]
+    n     = len(items)
+
+    # 超過 3 個品項：每 3 個一份，依序遞迴生成
+    if n > 3:
+        h        = data["header"]
+        customer = h.get("customer", "客戶")
+        date_tag = extra.get("ship_date", "").replace("/", "") or datetime.today().strftime("%Y%m%d")
+        base     = out_filename or f"維修單-{customer}-{date_tag}.xlsx"
+        stem     = Path(base).stem
+        chunks   = [items[i:i+3] for i in range(0, n, 3)]
+        paths    = []
+        for idx, chunk in enumerate(chunks):
+            fn = base if idx == 0 else f"{stem}-{idx + 1}.xlsx"
+            paths.append(generate_fix(dict(data, items=chunk), extra, fn))
+        return paths
+
     OUTPUT_DIR.mkdir(exist_ok=True)
     tmp = OUTPUT_DIR / "_working_fix.xlsx"
     shutil.copy(TEMPLATE_PATH, tmp)
@@ -123,8 +140,6 @@ def generate_fix(data, extra, out_filename=""):
     ws = wb.active
 
     h       = data["header"]
-    items   = data["items"]
-    n       = len(items)
     n_extra = n - 1
 
     # ── 1. 表頭 ───────────────────────────────────────────────

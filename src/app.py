@@ -402,16 +402,19 @@ class App(tk.Tk):
         }
 
         try:
-            out_path = generate_fix(self._parsed_data, extra)
-            ans = messagebox.askyesno("生成成功",
-                f"維修單已儲存至：\n{out_path}\n\n是否立即開啟？")
+            result = generate_fix(self._parsed_data, extra)
+            paths  = result if isinstance(result, list) else [result]
+            msg    = "\n".join(str(p) for p in paths)
+            ans    = messagebox.askyesno("生成成功",
+                f"已生成 {len(paths)} 份維修單：\n{msg}\n\n是否立即開啟？")
             if ans:
-                if sys.platform == "win32":
-                    os.startfile(out_path)
-                elif sys.platform == "darwin":
-                    subprocess.run(["open", str(out_path)])
-                else:
-                    subprocess.run(["xdg-open", str(out_path)])
+                for p in paths:
+                    if sys.platform == "win32":
+                        os.startfile(p)
+                    elif sys.platform == "darwin":
+                        subprocess.run(["open", str(p)])
+                    else:
+                        subprocess.run(["xdg-open", str(p)])
         except Exception as e:
             messagebox.showerror("生成失敗", str(e))
 
