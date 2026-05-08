@@ -511,6 +511,29 @@ def generate_inspection(src_path: str, data: dict):
         if not isinstance(sig_cell, MergedCell):
             sig_cell.border = Border(bottom=Side(style='thin'))
 
+    # ── ⑦ 掃描 A 欄，找到「備註:」→ 清空該格、右邊同列、右邊往下7列 ──
+    def _clear(ws, row, col):
+        cell = ws.cell(row=row, column=col)
+        if not isinstance(cell, MergedCell):
+            cell.value = None
+            return
+        for merge in ws.merged_cells.ranges:
+            if merge.min_row <= row <= merge.max_row and merge.min_col <= col <= merge.max_col:
+                ws.cell(row=merge.min_row, column=merge.min_col).value = None
+                return
+
+    for row in ws.iter_rows(min_col=1, max_col=1):
+        cell = row[0]
+        if isinstance(cell, MergedCell) or cell.value is None:
+            continue
+        if '備註' in str(cell.value):
+            r, c = cell.row, cell.column
+            cell.value = None
+            for dr in range(0, 8):
+                _clear(ws, r + dr, c + 1)
+            for dr in range(4, 8):
+                _clear(ws, r + dr, c + 2)
+
     wb.save(out_path)
 
     # ── ⑧ 產生 Word（每個品項一份）──────────────────────────────
