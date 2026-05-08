@@ -13,8 +13,8 @@ from openpyxl.cell import MergedCell
 TEMPLATE_PATH = Path(__file__).parent.parent / "template" / "template.xlsx"
 OUTPUT_DIR    = Path(__file__).parent.parent / "output"
 
-ITEM_ROW     = 8
-FOOTER_START = 9   # 附註列（insert 插入點，也是 footer 合併格的起始列）
+ITEM_ROW     = 10
+FOOTER_START = 11   # 附註列（insert 插入點，也是 footer 合併格的起始列）
 
 
 def _format_date(s):
@@ -101,24 +101,24 @@ def generate(data, extra, out_filename=""):
     n     = len(items)
     n_extra = n - 1   # 需插入的額外列數
 
-    # ── 1. 固定表頭（幣別 I5 不動）────────────────────────────
-    ws["A3"] = "出貨日期：" + _format_date(extra.get("ship_date", ""))
-    _safe_write(ws, 4, 3, h.get("customer", ""))
-    _safe_write(ws, 5, 3, h.get("phone", ""))
-    _safe_write(ws, 6, 3, h.get("address", ""))   # C6 地址
-    ws["F5"] = "聯絡人：" + h.get("contact", "")
+    # ── 1. 固定表頭 ───────────────────────────────────────────
+    ws["A5"] = "出貨日期：" + _format_date(extra.get("ship_date", ""))
+    _safe_write(ws, 6, 3, h.get("customer", ""))
+    _safe_write(ws, 7, 3, h.get("phone", ""))
+    _safe_write(ws, 8, 3, h.get("address", ""))
+    ws["F7"] = "聯絡人：" + h.get("contact", "")
 
     sale_no = extra.get("sale_no", "").strip()
     if sale_no:
-        ws["I4"] = "銷貨單號：" + sale_no
+        ws["I6"] = "銷貨單號：" + sale_no
 
     tax_id = h.get("tax_id", "").strip()
     if tax_id:
-        ws["F4"] = "統一編號：" + tax_id
+        ws["F6"] = "統一編號：" + tax_id
 
     # ── 2. 多品項時：先移動 footer 合併格，再 insert ──────────
     if n_extra > 0:
-        _shift_footer_merges(ws, n_extra)   # ← 先移，才不會被 insert 搞亂
+        _shift_footer_merges(ws, n_extra)
         ws.insert_rows(FOOTER_START, amount=n_extra)
 
     # ── 3. 寫入各品項 ─────────────────────────────────────────

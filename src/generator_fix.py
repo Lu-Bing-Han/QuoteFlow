@@ -14,8 +14,8 @@ from openpyxl.cell import MergedCell
 TEMPLATE_PATH = Path(__file__).parent.parent / "template" / "template_fix.xlsx"
 OUTPUT_DIR    = Path(__file__).parent.parent / "output"
 
-ITEM_ROW     = 8
-FOOTER_START = 9
+ITEM_ROW     = 10
+FOOTER_START = 11
 
 
 def _format_date(s):
@@ -92,19 +92,19 @@ def generate_fix(data, extra, out_filename=""):
     n_extra = n - 1
 
     # ── 1. 表頭 ───────────────────────────────────────────────
-    ws["A3"] = "維修日期：" + _format_date(extra.get("ship_date", ""))
-    _safe_write(ws, 4, 3, h.get("customer", ""))
-    _safe_write(ws, 5, 3, h.get("phone", ""))
-    _safe_write(ws, 6, 3, h.get("address", ""))
-    ws["F5"] = "聯絡人：" + h.get("contact", "")
+    ws["A5"] = "維修日期：" + _format_date(extra.get("ship_date", ""))
+    _safe_write(ws, 6, 3, h.get("customer", ""))
+    _safe_write(ws, 7, 3, h.get("phone", ""))
+    _safe_write(ws, 8, 3, h.get("address", ""))
+    ws["F7"] = "聯絡人：" + h.get("contact", "")
 
     sale_no = extra.get("sale_no", "").strip()
     if sale_no:
-        ws["I4"] = "銷貨單號：" + sale_no
+        ws["I6"] = "銷貨單號：" + sale_no
 
     tax_id = h.get("tax_id", "").strip()
     if tax_id:
-        ws["F4"] = "統一編號：" + tax_id
+        ws["F6"] = "統一編號：" + tax_id
 
     # ── 2. 插入多餘列 ─────────────────────────────────────────
     if n_extra > 0:
