@@ -13,7 +13,7 @@ from generator import generate
 from generator_inspection import generate_inspection
 from generator_fix import generate_fix
 
-CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+from _paths import CONFIG_PATH, ICON_PATH
 
 def _load_config():
     if CONFIG_PATH.exists():
@@ -34,6 +34,9 @@ class App(tk.Tk):
         self.geometry("960x760")
         self.resizable(True, True)
         self.configure(bg="#f4f6f8")
+        if ICON_PATH.exists():
+            self._icon = tk.PhotoImage(file=str(ICON_PATH))
+            self.iconphoto(True, self._icon)
         self._parsed_data = None
         self._src_path = None
         self._config = _load_config()

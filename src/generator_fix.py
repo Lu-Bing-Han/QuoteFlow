@@ -11,8 +11,8 @@ from pathlib import Path
 import openpyxl
 from openpyxl.cell import MergedCell
 
-TEMPLATE_PATH = Path(__file__).parent.parent / "template" / "template_fix.xlsx"
-OUTPUT_DIR    = Path(__file__).parent.parent / "output"
+from _paths import TEMPLATE_DIR, OUTPUT_DIR
+TEMPLATE_PATH = TEMPLATE_DIR / "template_fix.xlsx"
 
 ITEM_ROW     = 10
 FOOTER_START = 11
