@@ -12,6 +12,7 @@ from parser import parse
 from generator import generate
 from generator_inspection import generate_inspection
 from generator_fix import generate_fix
+from generator_tag import generate_tag
 
 from _paths import CONFIG_PATH, ICON_PATH
 
@@ -144,6 +145,66 @@ class App(tk.Tk):
                   bg="#5d6d7e", fg="white", relief="flat",
                   font=FONT, padx=6).grid(row=0, column=1, padx=(4, 0))
 
+        # ── 維修掛件區塊 ────────────────────────────────────────────
+        tgf = tk.LabelFrame(self, text="維修掛件", bg="#f4f6f8", font=FONTB)
+        tgf.pack(fill="x", padx=12, pady=(4, 0))
+        tgf.columnconfigure(1, weight=1)
+        tgf.columnconfigure(3, weight=1)
+
+        self._tag_vars = {}
+
+        # No. — 下拉式
+        no_var = tk.StringVar(value="1")
+        self._tag_vars["no"] = no_var
+        tk.Label(tgf, text="No.：", bg="#f4f6f8", anchor="w", font=FONT).grid(
+            row=0, column=0, sticky="w", padx=8, pady=2)
+        ttk.Combobox(tgf, textvariable=no_var,
+                     values=[str(i) for i in range(1, 15)],
+                     width=8, font=FONT).grid(
+            row=0, column=1, sticky="w", padx=8, pady=2)
+
+        # 品號 — 從報價單讀入，下拉選取
+        self._tag_partno_var = tk.StringVar()
+        self._tag_vars["part_no"] = self._tag_partno_var
+        tk.Label(tgf, text="品號：", bg="#f4f6f8", anchor="w", font=FONT).grid(
+            row=0, column=2, sticky="w", padx=8, pady=2)
+        self._tag_partno_cb = ttk.Combobox(tgf, textvariable=self._tag_partno_var,
+                                            font=FONT, width=20)
+        self._tag_partno_cb.grid(row=0, column=3, sticky="ew", padx=8, pady=2)
+
+        # 序號
+        seq_var = tk.StringVar()
+        self._tag_vars["seq_no"] = seq_var
+        tk.Label(tgf, text="序號：", bg="#f4f6f8", anchor="w", font=FONT).grid(
+            row=1, column=0, sticky="w", padx=8, pady=2)
+        tk.Entry(tgf, textvariable=seq_var, font=FONT).grid(
+            row=1, column=1, sticky="ew", padx=8, pady=2)
+
+        # 拉回 — 日曆
+        from tkcalendar import DateEntry
+        tk.Label(tgf, text="拉回：", bg="#f4f6f8", anchor="w", font=FONT).grid(
+            row=1, column=2, sticky="w", padx=8, pady=2)
+        self._tag_date_entry = DateEntry(
+            tgf, font=FONT, date_pattern="yyyy/mm/dd",
+            background="#2e86c1", foreground="white", width=14)
+        self._tag_date_entry.grid(row=1, column=3, sticky="w", padx=8, pady=2)
+
+        # 問題
+        prob_var = tk.StringVar()
+        self._tag_vars["problem"] = prob_var
+        tk.Label(tgf, text="問題：", bg="#f4f6f8", anchor="w", font=FONT).grid(
+            row=2, column=0, sticky="w", padx=8, pady=2)
+        tk.Entry(tgf, textvariable=prob_var, font=FONT).grid(
+            row=2, column=1, sticky="ew", padx=8, pady=2)
+
+        # 維修狀況
+        status_var = tk.StringVar()
+        self._tag_vars["repair_status"] = status_var
+        tk.Label(tgf, text="維修狀況：", bg="#f4f6f8", anchor="w", font=FONT).grid(
+            row=2, column=2, sticky="w", padx=8, pady=2)
+        tk.Entry(tgf, textvariable=status_var, font=FONT).grid(
+            row=2, column=3, sticky="ew", padx=8, pady=2)
+
         tf = tk.LabelFrame(self, text="品項列表（雙擊儲存格可編輯）",
                            bg="#f4f6f8", font=FONTB)
         tf.pack(fill="both", expand=True, padx=12, pady=4)
@@ -208,6 +269,11 @@ class App(tk.Tk):
                     item["qty"], item["unit"],
                     "", ""))
             self._fill_vars["sale_no"].set(h.get("quote_no", ""))
+            part_nos = [item.get("part_no", "") or item.get("name", "")
+                        for item in data["items"]]
+            self._tag_partno_cb["values"] = part_nos
+            if part_nos:
+                self._tag_partno_var.set(part_nos[0])
         except Exception as e:
             messagebox.showerror("讀取失敗", f"無法解析報價單：\n{e}")
 
@@ -433,12 +499,41 @@ class App(tk.Tk):
             "invoice_choice": self._invoice_var.get(),
         }
 
+        # 維修掛件欄位檢查
+        tag_fields = [
+            self._tag_vars["seq_no"].get().strip(),
+            self._tag_vars["problem"].get().strip(),
+            self._tag_vars["repair_status"].get().strip(),
+        ]
+        gen_tag = True
+        if not any(tag_fields):
+            gen_tag = messagebox.askyesno(
+                "維修掛件未填寫",
+                "維修掛件欄位尚未填寫，是否仍要繼續生成維修單（不含掛件）？")
+            if not gen_tag:
+                return
+
         try:
             result = generate_fix(self._parsed_data, extra, output_dir=self._get_output_dir())
             paths  = result if isinstance(result, list) else [result]
-            msg    = "\n".join(str(p) for p in paths)
-            ans    = messagebox.askyesno("生成成功",
-                f"已生成 {len(paths)} 份維修單：\n{msg}\n\n是否立即開啟？")
+
+            tag_path = None
+            if gen_tag and any(tag_fields):
+                tag_data = {
+                    "no":            self._tag_vars["no"].get(),
+                    "part_no":       self._tag_vars["part_no"].get(),
+                    "seq_no":        self._tag_vars["seq_no"].get(),
+                    "problem":       self._tag_vars["problem"].get(),
+                    "pullback_date": self._tag_date_entry.get_date().strftime("%Y/%m/%d"),
+                    "repair_status": self._tag_vars["repair_status"].get(),
+                }
+                tag_path = generate_tag(self._parsed_data, tag_data,
+                                        output_dir=self._get_output_dir())
+                paths.append(tag_path)
+
+            msg = "\n".join(str(p) for p in paths)
+            ans = messagebox.askyesno("生成成功",
+                f"已生成 {len(paths)} 份檔案：\n{msg}\n\n是否立即開啟？")
             if ans:
                 for p in paths:
                     if sys.platform == "win32":
