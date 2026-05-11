@@ -124,7 +124,8 @@ def _append_invoice_to_footer(ws, invoice_choice):
                 return
 
 
-def generate(data, extra, out_filename=""):
+def generate(data, extra, out_filename="", output_dir=None):
+    out_dir = Path(output_dir) if output_dir else OUTPUT_DIR
     items = data["items"]
     n     = len(items)
 
@@ -139,11 +140,11 @@ def generate(data, extra, out_filename=""):
         paths    = []
         for idx, chunk in enumerate(chunks):
             fn = base if idx == 0 else f"{stem}-{idx + 1}.xlsx"
-            paths.append(generate(dict(data, items=chunk), extra, fn))
+            paths.append(generate(dict(data, items=chunk), extra, fn, output_dir=output_dir))
         return paths
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    tmp = OUTPUT_DIR / "_working.xlsx"
+    out_dir.mkdir(exist_ok=True)
+    tmp = out_dir / "_working.xlsx"
     shutil.copy(TEMPLATE_PATH, tmp)
 
     wb = openpyxl.load_workbook(tmp)
@@ -209,7 +210,7 @@ def generate(data, extra, out_filename=""):
         date_tag = extra.get("ship_date", "").replace("/", "") or datetime.today().strftime("%Y%m%d")
         out_filename = f"出貨單-{customer}-{date_tag}.xlsx"
 
-    out_path = OUTPUT_DIR / out_filename
+    out_path = out_dir / out_filename
     wb.save(out_path)
     tmp.unlink(missing_ok=True)
     return out_path
