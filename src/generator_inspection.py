@@ -17,6 +17,7 @@ Word 部分：
 """
 
 import re, shutil, zipfile
+from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -549,7 +550,8 @@ def generate_inspection(src_path: str, data: dict):
                     red_lines.extend(red_by_row.get(r, []))
 
                 safe_part = re.sub(r'[\\/:*?"<>|]', '_', part_no) if part_no else f'item{seq}'
-                word_out  = OUTPUT_DIR / f"驗機單-{customer}-{safe_part}.docx"
+                date_tag  = datetime.today().strftime("%Y%m%d")
+                word_out  = OUTPUT_DIR / f"{customer}{safe_part}改造紀錄單-{date_tag}.docx"
                 _generate_word_from_template(part_no, red_lines, word_out,
                                              customer=customer)
                 word_paths.append(word_out)

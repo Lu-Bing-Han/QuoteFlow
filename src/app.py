@@ -79,8 +79,7 @@ class App(tk.Tk):
             tk.Label(lf, text=label + "：", bg="#f4f6f8",
                      anchor="w", font=FONT).grid(row=i, column=0, sticky="w", **PAD)
             var = tk.StringVar(value="—")
-            tk.Label(lf, textvariable=var, bg="#eaf4fb", anchor="w",
-                     relief="groove", font=FONT
+            tk.Entry(lf, textvariable=var, font=FONT
                      ).grid(row=i, column=1, sticky="ew", **PAD)
             self._read_vars[key] = var
 
@@ -132,6 +131,18 @@ class App(tk.Tk):
             tk.Radiobutton(inv_f, text=lbl, variable=self._invoice_var,
                            value=val, bg="#f4f6f8", font=FONT,
                            activebackground="#f4f6f8").pack(side="left", padx=(0,8))
+
+        tk.Label(rf, text="輸出路徑：", bg="#f4f6f8",
+                 anchor="w", font=FONT).grid(row=5, column=0, sticky="w", **PAD)
+        out_f = tk.Frame(rf, bg="#f4f6f8")
+        out_f.grid(row=5, column=1, sticky="ew", **PAD)
+        out_f.columnconfigure(0, weight=1)
+        self._output_var = tk.StringVar(value=self._config.get("output_dir", ""))
+        tk.Entry(out_f, textvariable=self._output_var, font=FONT
+                 ).grid(row=0, column=0, sticky="ew")
+        tk.Button(out_f, text="瀏覽", command=self._browse_output,
+                  bg="#5d6d7e", fg="white", relief="flat",
+                  font=FONT, padx=6).grid(row=0, column=1, padx=(4, 0))
 
         tf = tk.LabelFrame(self, text="品項列表（雙擊儲存格可編輯）",
                            bg="#f4f6f8", font=FONTB)
@@ -305,6 +316,22 @@ class App(tk.Tk):
             self._operator_cb["values"] = self._config["operators"]
             self._operator_var.set(self._config["operators"][0])
 
+    def _browse_output(self):
+        folder = filedialog.askdirectory(title="選擇輸出資料夾")
+        if folder:
+            self._output_var.set(folder)
+            self._config["output_dir"] = folder
+            _save_config(self._config)
+
+    def _get_output_dir(self):
+        path = self._output_var.get().strip()
+        return Path(path) if path else None
+
+    def _sync_header(self):
+        for key, var in self._read_vars.items():
+            val = var.get()
+            self._parsed_data["header"][key] = "" if val == "—" else val
+
     @staticmethod
     def _to_num(s, default=0):
         try:
@@ -326,6 +353,7 @@ class App(tk.Tk):
                           "unit_price": self._to_num(v[4]),
                           "subtotal": self._to_num(v[5])})
         self._parsed_data["items"] = items
+        self._sync_header()
 
         extra = {
             "ship_date":      self._fill_vars["ship_date"].get(),
@@ -336,7 +364,7 @@ class App(tk.Tk):
         }
 
         try:
-            result = generate(self._parsed_data, extra)
+            result = generate(self._parsed_data, extra, output_dir=self._get_output_dir())
             paths  = result if isinstance(result, list) else [result]
             msg    = "\n".join(str(p) for p in paths)
             ans    = messagebox.askyesno("生成成功",
@@ -395,6 +423,7 @@ class App(tk.Tk):
                           "unit_price": self._to_num(v[4]),
                           "subtotal": self._to_num(v[5])})
         self._parsed_data["items"] = items
+        self._sync_header()
 
         extra = {
             "ship_date":      self._fill_vars["ship_date"].get(),
@@ -405,7 +434,7 @@ class App(tk.Tk):
         }
 
         try:
-            result = generate_fix(self._parsed_data, extra)
+            result = generate_fix(self._parsed_data, extra, output_dir=self._get_output_dir())
             paths  = result if isinstance(result, list) else [result]
             msg    = "\n".join(str(p) for p in paths)
             ans    = messagebox.askyesno("生成成功",
