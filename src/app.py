@@ -133,17 +133,20 @@ class App(tk.Tk):
                            value=val, bg="#f4f6f8", font=FONT,
                            activebackground="#f4f6f8").pack(side="left", padx=(0,8))
 
-        tk.Label(rf, text="輸出路徑：", bg="#f4f6f8",
-                 anchor="w", font=FONT).grid(row=5, column=0, sticky="w", **PAD)
-        out_f = tk.Frame(rf, bg="#f4f6f8")
-        out_f.grid(row=5, column=1, sticky="ew", **PAD)
-        out_f.columnconfigure(0, weight=1)
-        self._output_var = tk.StringVar(value=self._config.get("output_dir", ""))
-        tk.Entry(out_f, textvariable=self._output_var, font=FONT
-                 ).grid(row=0, column=0, sticky="ew")
-        tk.Button(out_f, text="瀏覽", command=self._browse_output,
-                  bg="#5d6d7e", fg="white", relief="flat",
-                  font=FONT, padx=6).grid(row=0, column=1, padx=(4, 0))
+        # ── 輸出路徑選擇（暫時停用，改為固定預設路徑）──────────────
+        # tk.Label(rf, text="輸出路徑：", bg="#f4f6f8",
+        #          anchor="w", font=FONT).grid(row=5, column=0, sticky="w", **PAD)
+        # out_f = tk.Frame(rf, bg="#f4f6f8")
+        # out_f.grid(row=5, column=1, sticky="ew", **PAD)
+        # out_f.columnconfigure(0, weight=1)
+        # self._output_var = tk.StringVar(value=self._config.get("output_dir", "") or r"Z:\出貨單\Quoteflow_output")
+        # self._output_lbl = tk.Label(out_f, textvariable=self._output_var,
+        #                             bg="#f4f6f8", font=FONT, anchor="w")
+        # self._output_lbl.grid(row=0, column=0, sticky="ew")
+        # tk.Button(out_f, text="瀏覽", command=self._browse_output,
+        #           bg="#5d6d7e", fg="white", relief="flat",
+        #           font=FONT, padx=6).grid(row=0, column=1, padx=(4, 0))
+
 
         # ── 維修掛件區塊 ────────────────────────────────────────────
         tgf = tk.LabelFrame(self, text="維修掛件", bg="#f4f6f8", font=FONTB)
@@ -159,7 +162,7 @@ class App(tk.Tk):
         tk.Label(tgf, text="No.：", bg="#f4f6f8", anchor="w", font=FONT).grid(
             row=0, column=0, sticky="w", padx=8, pady=2)
         ttk.Combobox(tgf, textvariable=no_var,
-                     values=[str(i) for i in range(1, 15)],
+                     values=[str(i) for i in range(1, 21)],
                      width=8, font=FONT).grid(
             row=0, column=1, sticky="w", padx=8, pady=2)
 
@@ -235,16 +238,35 @@ class App(tk.Tk):
                   bg="#c0392b", fg="white", relief="flat",
                   font=FONT, padx=10, pady=3).pack(side="left")
 
+        # ── 預設輸出路徑標示 ─────────────────────────────────────────
+        pf = tk.Frame(self, bg="#e8ecf0")
+        pf.pack(fill="x", padx=12, pady=(0, 2))
+        GRAY = "#5d6d7e"
+        FONT_S = ("Microsoft JhengHei", 8)
+        for label, path in [
+            ("出貨單／維修單", r"Z:\出貨單\Quoteflow_output"),
+            ("驗機單／改造紀錄單", r"Z:\Mika\驗收單及改造記錄單\Quoteflow_output"),
+            ("維修掛件", r"Z:\待維修機台資料"),
+        ]:
+            row = tk.Frame(pf, bg="#e8ecf0")
+            row.pack(fill="x")
+            tk.Label(row, text=label + "：", bg="#e8ecf0", font=FONT_S,
+                     fg=GRAY, anchor="w", width=14).pack(side="left")
+            tk.Label(row, text=path, bg="#e8ecf0", font=FONT_S,
+                     fg=GRAY, anchor="w").pack(side="left")
+
         bot = tk.Frame(self, bg="#f4f6f8", pady=10)
-        bot.pack(fill="x")
-        for text, cmd, color in [
+        bot.pack(fill="x", padx=12)
+        for i, (text, cmd, color) in enumerate([
             ("⬇  生成出貨單", self._generate,             "#1a5276"),
             ("🔍  生成驗機單", self._generate_inspection,  "#6c3483"),
             ("🔧  生成維修單", self._generate_fix,         "#d68910"),
-        ]:
+        ]):
+            bot.columnconfigure(i, weight=1)
             tk.Button(bot, text=text, command=cmd, bg=color, fg="white",
                       font=("Microsoft JhengHei", 13, "bold"),
-                      relief="flat", padx=16, pady=8).pack(side="left", expand=True, fill="x", padx=6)
+                      relief="flat", pady=8).grid(row=0, column=i, sticky="ew",
+                                                  padx=(0 if i == 0 else 6, 0))
 
     # ── 開檔 ──────────────────────────────────────────────────
     def _open_file(self):
@@ -382,16 +404,15 @@ class App(tk.Tk):
             self._operator_cb["values"] = self._config["operators"]
             self._operator_var.set(self._config["operators"][0])
 
-    def _browse_output(self):
-        folder = filedialog.askdirectory(title="選擇輸出資料夾")
-        if folder:
-            self._output_var.set(folder)
-            self._config["output_dir"] = folder
-            _save_config(self._config)
+    # def _browse_output(self):
+    #     folder = filedialog.askdirectory(title="選擇輸出資料夾")
+    #     if folder:
+    #         self._output_var.set(folder)
+    #         self._config["output_dir"] = folder
+    #         _save_config(self._config)
 
-    def _get_output_dir(self):
-        path = self._output_var.get().strip()
-        return Path(path) if path else None
+    _OUT_SHIPPING = Path(r"Z:\出貨單\Quoteflow_output")
+    _OUT_TAG      = Path(r"Z:\待維修機台資料")
 
     def _sync_header(self):
         for key, var in self._read_vars.items():
@@ -430,7 +451,7 @@ class App(tk.Tk):
         }
 
         try:
-            result = generate(self._parsed_data, extra, output_dir=self._get_output_dir())
+            result = generate(self._parsed_data, extra, output_dir=self._OUT_SHIPPING)
             paths  = result if isinstance(result, list) else [result]
             msg    = "\n".join(str(p) for p in paths)
             ans    = messagebox.askyesno("生成成功",
@@ -514,7 +535,7 @@ class App(tk.Tk):
                 return
 
         try:
-            result = generate_fix(self._parsed_data, extra, output_dir=self._get_output_dir())
+            result = generate_fix(self._parsed_data, extra, output_dir=self._OUT_SHIPPING)
             paths  = result if isinstance(result, list) else [result]
 
             tag_path = None
@@ -528,7 +549,7 @@ class App(tk.Tk):
                     "repair_status": self._tag_vars["repair_status"].get(),
                 }
                 tag_path = generate_tag(self._parsed_data, tag_data,
-                                        output_dir=self._get_output_dir())
+                                        output_dir=self._OUT_TAG)
                 paths.append(tag_path)
 
             msg = "\n".join(str(p) for p in paths)

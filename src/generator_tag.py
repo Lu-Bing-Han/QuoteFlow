@@ -137,7 +137,8 @@ def generate_tag(data, tag_data, output_dir=None):
 
     customer   = data["header"].get("customer", "客戶")
     date_tag   = datetime.today().strftime("%Y%m%d")
-    out_path   = out_dir / f"維修掛件-{customer}-{date_tag}.docx"
+    part_no_fn = str(tag_data.get("part_no", ""))
+    out_path   = out_dir / f"維修掛件-{part_no_fn}{customer}-{date_tag}.docx"
 
     shutil.copy(str(TAG_TEMPLATE), str(out_path))
     doc = Document(str(out_path))

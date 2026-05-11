@@ -24,7 +24,9 @@ from xml.etree import ElementTree as ET
 from openpyxl import load_workbook
 from openpyxl.cell import MergedCell
 
-from _paths import TEMPLATE_DIR, OUTPUT_DIR
+from _paths import TEMPLATE_DIR
+from pathlib import Path as _Path
+OUTPUT_DIR = _Path(r"Z:\Mika\驗收單及改造記錄單\Quoteflow_output")
 WORD_TEMPLATE = TEMPLATE_DIR / "template.docx"
 TITLE_RE      = re.compile(r'報[\s　]*價[\s　]*單')
 CLEAR_KW      = {"電話", "傳真", "聯絡人", "統一編號", "聯絡地址", "EMAIL"}
