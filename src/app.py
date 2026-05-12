@@ -13,6 +13,7 @@ from generator import generate
 from generator_inspection import generate_inspection
 from generator_fix import generate_fix
 from generator_tag import generate_tag
+from generator_label import generate_labels
 
 from _paths import CONFIG_PATH, ICON_PATH
 
@@ -32,12 +33,28 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("報價單 → 出貨單 轉換工具｜立善科技")
-        self.geometry("960x760")
+        self.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        win_h = min(sh - 60, 920)   # 留 60px 給工作列
+        self.geometry(f"960x{win_h}+{(sw-960)//2}+0")
         self.resizable(True, True)
         self.configure(bg="#f4f6f8")
         if ICON_PATH.exists():
             self._icon = tk.PhotoImage(file=str(ICON_PATH))
             self.iconphoto(True, self._icon)
+            # 工作列 icon 需要 .ico 格式
+            _ico = ICON_PATH.with_suffix(".ico")
+            if not _ico.exists():
+                try:
+                    from PIL import Image
+                    Image.open(ICON_PATH).save(_ico, format="ICO")
+                except Exception:
+                    pass
+            if _ico.exists():
+                try:
+                    self.iconbitmap(str(_ico))
+                except Exception:
+                    pass
         self._parsed_data = None
         self._src_path = None
         self._config = _load_config()
@@ -57,8 +74,8 @@ class App(tk.Tk):
                   bg="#2e86c1", fg="white", relief="flat",
                   font=("Microsoft JhengHei", 11), padx=12, pady=4).pack(side="right", padx=16)
 
-        self._file_label = tk.Label(self, text="尚未選擇報價單",
-                                    bg="#f4f6f8", fg="#888", font=FONT)
+        self._file_label = tk.Label(self, text="⚠  尚未選擇報價單",
+                                    bg="#f4f6f8", fg="#c0392b", font=FONT)
         self._file_label.pack(anchor="w", padx=16, pady=(4, 0))
 
         mid = tk.Frame(self, bg="#f4f6f8")
@@ -238,9 +255,24 @@ class App(tk.Tk):
                   bg="#c0392b", fg="white", relief="flat",
                   font=FONT, padx=10, pady=3).pack(side="left")
 
+        # ── 生成按鈕（先 pack side=bottom 確保永遠可見）──────────────
+        bot = tk.Frame(self, bg="#f4f6f8", pady=10)
+        bot.pack(side="bottom", fill="x", padx=12)
+        for i, (text, cmd, color) in enumerate([
+            ("⬇  生成出貨單", self._generate,             "#1a5276"),
+            ("🔍  生成驗機單", self._generate_inspection,  "#6c3483"),
+            ("🔧  生成維修單", self._generate_fix,         "#d68910"),
+            ("🏷  標籤生成",  self._open_label_window,    "#1e8449"),
+        ]):
+            bot.columnconfigure(i, weight=1)
+            tk.Button(bot, text=text, command=cmd, bg=color, fg="white",
+                      font=("Microsoft JhengHei", 13, "bold"),
+                      relief="flat", pady=8).grid(row=0, column=i, sticky="ew",
+                                                  padx=(0 if i == 0 else 6, 0))
+
         # ── 預設輸出路徑標示 ─────────────────────────────────────────
         pf = tk.Frame(self, bg="#e8ecf0")
-        pf.pack(fill="x", padx=12, pady=(0, 2))
+        pf.pack(side="bottom", fill="x", padx=12, pady=(0, 2))
         GRAY = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei", 8)
         for label, path in [
@@ -255,19 +287,6 @@ class App(tk.Tk):
             tk.Label(row, text=path, bg="#e8ecf0", font=FONT_S,
                      fg=GRAY, anchor="w").pack(side="left")
 
-        bot = tk.Frame(self, bg="#f4f6f8", pady=10)
-        bot.pack(fill="x", padx=12)
-        for i, (text, cmd, color) in enumerate([
-            ("⬇  生成出貨單", self._generate,             "#1a5276"),
-            ("🔍  生成驗機單", self._generate_inspection,  "#6c3483"),
-            ("🔧  生成維修單", self._generate_fix,         "#d68910"),
-        ]):
-            bot.columnconfigure(i, weight=1)
-            tk.Button(bot, text=text, command=cmd, bg=color, fg="white",
-                      font=("Microsoft JhengHei", 13, "bold"),
-                      relief="flat", pady=8).grid(row=0, column=i, sticky="ew",
-                                                  padx=(0 if i == 0 else 6, 0))
-
     # ── 開檔 ──────────────────────────────────────────────────
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -279,7 +298,7 @@ class App(tk.Tk):
         try:
             data = parse(path)
             self._parsed_data = data
-            self._file_label.config(text=f"已載入：{path}", fg="#1a5276")
+            self._file_label.config(text=f"✔  已載入：{path}", fg="#1e8449")
             h = data["header"]
             for key, var in self._read_vars.items():
                 var.set(h.get(key, "") or "—")
@@ -565,6 +584,141 @@ class App(tk.Tk):
                         subprocess.run(["xdg-open", str(p)])
         except Exception as e:
             messagebox.showerror("生成失敗", str(e))
+
+    # ── 標籤生成視窗 ──────────────────────────────────────────
+    def _open_label_window(self):
+        win = tk.Toplevel(self)
+        win.title("批量標籤生成")
+        win.geometry("700x460")
+        win.configure(bg="#f4f6f8")
+        win.grab_set()
+
+        FONT  = ("Microsoft JhengHei", 11)
+        FONTB = ("Microsoft JhengHei", 11, "bold")
+
+        # ── 模板選擇 ───────────────────────────────────────────
+        tpl_frame = tk.Frame(win, bg="#f4f6f8")
+        tpl_frame.pack(fill="x", padx=12, pady=(10, 0))
+        tk.Label(tpl_frame, text="標籤樣式：", bg="#f4f6f8", font=FONTB).pack(side="left")
+        _tpl_var = tk.StringVar(value="銀標")
+        for label in ["銀標", "無公司標"]:
+            tk.Radiobutton(tpl_frame, text=label, variable=_tpl_var, value=label,
+                           bg="#f4f6f8", font=FONT,
+                           activebackground="#f4f6f8").pack(side="left", padx=(8, 0))
+
+        # ── 表格（tksheet — 支援框選、Ctrl+C/V）──────────────────
+        from tksheet import Sheet
+        import re as _re
+        _LOAD_RE = _re.compile(r'載重[：:]\s*(\S+)')
+
+        tf = tk.LabelFrame(win, text="標籤資料", bg="#f4f6f8", font=FONTB)
+        tf.pack(fill="both", expand=True, padx=12, pady=(10, 4))
+
+        sheet = Sheet(tf,
+                      headers=["型號", "荷重", "製造序號"],
+                      data=[["", "", ""] for _ in range(50)],
+                      column_width=210,
+                      row_height=28)
+        sheet.enable_bindings()
+        sheet.pack(fill="both", expand=True)
+
+        # ── 從報價單讀入 ────────────────────────────────────────
+        def _load_from_quote():
+            today = datetime.today()
+            serial = f"{today.year % 100 + 12:02d}{today.month + 12:02d}"
+            rows = []
+            if self._parsed_data:
+                for item in self._parsed_data.get("items", []):
+                    m = _LOAD_RE.search(item.get("name", ""))
+                    raw = m.group(1) if m else ""
+                    load = (raw if raw.lower().endswith("kgs") else raw + "kgs") if raw else ""
+                    rows.append([item.get("part_no", ""), load, serial])
+            while len(rows) < 50:
+                rows.append(["", "", ""])
+            sheet.data = rows
+
+        _load_from_quote()
+
+        # ── 流水號自動填入 ─────────────────────────────────────
+        def _autofill_serial():
+            data = sheet.data
+            # 找第一個有填製造序號的列
+            start_row, start_val = None, ""
+            for i, row in enumerate(data):
+                v = str(row[2]).strip() if len(row) > 2 else ""
+                if v:
+                    start_row, start_val = i, v
+                    break
+            if start_row is None:
+                messagebox.showwarning("無起始序號",
+                    "請先在製造序號欄填入第一個序號", parent=win)
+                return
+            # 拆出前綴 + 數字尾
+            m = _re.match(r'^(.*?)(\d+)$', start_val)
+            if not m:
+                messagebox.showwarning("格式不符",
+                    "序號結尾需為數字，例如 SN001 或 2026001", parent=win)
+                return
+            prefix, num_str = m.group(1), m.group(2)
+            width = len(num_str)   # 保留補零位數
+            counter = int(num_str)
+            # 往下填滿有型號資料的列
+            for i in range(start_row, len(data)):
+                has_content = str(data[i][0]).strip() or str(data[i][1]).strip()
+                if i == start_row or has_content:
+                    data[i][2] = prefix + str(counter).zfill(width)
+                    counter += 1
+            sheet.data = data
+
+        # ── 操作按鈕 ───────────────────────────────────────────
+        bb = tk.Frame(win, bg="#f4f6f8")
+        bb.pack(fill="x", padx=12, pady=(0, 4))
+        tk.Button(bb, text="從報價單讀入", command=_load_from_quote,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT, padx=8).pack(side="left", padx=(0, 6))
+        tk.Button(bb, text="＋ 新增列",
+                  command=lambda: sheet.insert_rows(number=1),
+                  bg="#27ae60", fg="white", relief="flat",
+                  font=FONT, padx=8).pack(side="left", padx=(0, 6))
+        tk.Button(bb, text="－ 刪除列",
+                  command=lambda: [sheet.delete_rows(row=r)
+                                   for r in sorted(sheet.get_selected_rows(), reverse=True)],
+                  bg="#c0392b", fg="white", relief="flat",
+                  font=FONT, padx=8).pack(side="left", padx=(0, 6))
+        tk.Button(bb, text="流水號↓", command=_autofill_serial,
+                  bg="#7d3c98", fg="white", relief="flat",
+                  font=FONT, padx=8).pack(side="left")
+
+        # ── 生成按鈕 ───────────────────────────────────────────
+        def _generate():
+            rows = sheet.data
+            def _with_kg(v):
+                v = str(v).strip()
+                return (v + "kgs") if v and not v.lower().endswith("kgs") else v
+            data_list = [
+                {"型號": str(r[0]).strip(), "荷重": _with_kg(r[1]), "製造序號": str(r[2]).strip()}
+                for r in rows if any(str(v).strip() for v in r)
+            ]
+            if not data_list:
+                messagebox.showwarning("無資料", "請先填入標籤資料", parent=win)
+                return
+            date_tag = datetime.today().strftime("%Y%m%d%H%M%S")
+            out_path = Path(r"Z:\出貨單\Quoteflow_output") / f"標籤-{date_tag}.pdf"
+            try:
+                result = generate_labels(data_list, out_path, template_key=_tpl_var.get())
+                if messagebox.askyesno("生成成功",
+                        f"已生成 {len(data_list)} 張標籤：\n{result}\n\n是否立即開啟？",
+                        parent=win):
+                    os.startfile(str(result))
+            except Exception as e:
+                messagebox.showerror("生成失敗", str(e), parent=win)
+
+        gf = tk.Frame(win, bg="#f4f6f8", pady=8)
+        gf.pack(fill="x", padx=12)
+        tk.Button(gf, text="🖨  生成標籤 PDF", command=_generate,
+                  bg="#1e8449", fg="white", relief="flat",
+                  font=("Microsoft JhengHei", 13, "bold"),
+                  pady=8).pack(fill="x")
 
 
 if __name__ == "__main__":
