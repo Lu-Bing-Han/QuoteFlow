@@ -601,40 +601,79 @@ class App(tk.Tk):
         tpl_frame.pack(fill="x", padx=12, pady=(10, 0))
         tk.Label(tpl_frame, text="標籤樣式：", bg="#f4f6f8", font=FONTB).pack(side="left")
         _tpl_var = tk.StringVar(value="銀標")
-        for label in ["銀標", "無公司標"]:
-            tk.Radiobutton(tpl_frame, text=label, variable=_tpl_var, value=label,
-                           bg="#f4f6f8", font=FONT,
-                           activebackground="#f4f6f8").pack(side="left", padx=(8, 0))
+        _tpl_cb  = ttk.Combobox(tpl_frame, textvariable=_tpl_var,
+                                 values=["銀標", "APT標", "無公司標", "上銀標"],
+                                 state="readonly", font=FONT, width=10)
+        _tpl_cb.pack(side="left", padx=(8, 0))
 
         # ── 表格（tksheet — 支援框選、Ctrl+C/V）──────────────────
         from tksheet import Sheet
         import re as _re
-        _LOAD_RE = _re.compile(r'載重[：:]\s*(\S+)')
+
+        # 欄位索引：0=型號 1=荷重 2=序號 3=機台尺寸 4=機台重量 5=出廠年份
+        #           6=供應商代碼 7=機台序號 8=訂單編號 9=收貨人
+        _HEADERS  = ["型號", "荷重", "序號", "機台尺寸", "機台重量", "出廠年份",
+                     "供應商代碼", "機台序號", "訂單編號", "收貨人"]
+        _EMPTY    = [""] * len(_HEADERS)
+        _COLS = {
+            "銀標":    [0, 1, 2],
+            "APT標":   [0, 1, 2, 3, 4, 5],
+            "無公司標": [0, 1, 2],
+            "上銀標":   [6, 7, 8, 9],
+        }
+        
+        _ALL_COLS = list(range(len(_HEADERS)))
 
         tf = tk.LabelFrame(win, text="標籤資料", bg="#f4f6f8", font=FONTB)
         tf.pack(fill="both", expand=True, padx=12, pady=(10, 4))
 
         sheet = Sheet(tf,
-                      headers=["型號", "荷重", "製造序號"],
-                      data=[["", "", ""] for _ in range(50)],
-                      column_width=210,
+                      headers=_HEADERS,
+                      data=[_EMPTY[:] for _ in range(50)],
+                      column_width=130,
                       row_height=28)
         sheet.enable_bindings()
         sheet.pack(fill="both", expand=True)
 
+        def _on_tpl_change(*_):
+            visible = _COLS.get(_tpl_var.get(), [0, 1, 2])
+            hidden  = [c for c in _ALL_COLS if c not in visible]
+            sheet.show_columns(_ALL_COLS)   # 先全部顯示，再隱藏不需要的
+            if hidden:
+                sheet.hide_columns(hidden)
+
+        _tpl_var.trace_add("write", _on_tpl_change)
+        _on_tpl_change()   # 初始套用（預設隱藏）
+
+        def _re_find(text, *patterns):
+            for pat in patterns:
+                m = _re.search(pat, text)
+                if m:
+                    return m.group(1).strip()
+            return ""
+
         # ── 從報價單讀入 ────────────────────────────────────────
         def _load_from_quote():
-            today = datetime.today()
+            today  = datetime.today()
             serial = f"{today.year % 100 + 12:02d}{today.month + 12:02d}"
-            rows = []
+            year   = str(today.year)
+            rows   = []
             if self._parsed_data:
                 for item in self._parsed_data.get("items", []):
-                    m = _LOAD_RE.search(item.get("name", ""))
-                    raw = m.group(1) if m else ""
-                    load = (raw if raw.lower().endswith("kgs") else raw + "kgs") if raw else ""
-                    rows.append([item.get("part_no", ""), load, serial])
+                    name = item.get("name", "")
+                    raw_load = _re_find(name, r'載重[：:]\s*(\S+)')
+                    load_num = _re.sub(r'[kK][gG][sS]?$', '', raw_load).strip()
+                    load     = (load_num + "kgs") if load_num else ""
+                    length = _re_find(name, r'牙叉長度\s*[：: ]+(\d+(?:\.\d+)?)')
+                    width  = _re_find(name, r'牙叉外寬\s*[：: ]+(\d+(?:\.\d+)?)')
+                    size   = (f"{length}mm*{width}mm" if length and width
+                              else (f"{length}mm" if length else f"{width}mm" if width else ""))
+                    weight_raw = _re_find(name, r'自重\s*[：:]\s*(\d+(?:\.\d+)?)')
+                    weight = (weight_raw + "kgs") if weight_raw else ""
+                    rows.append([item.get("part_no", ""), load, serial,
+                                 size, weight, year])
             while len(rows) < 50:
-                rows.append(["", "", ""])
+                rows.append(_EMPTY[:])
             sheet.data = rows
 
         _load_from_quote()
@@ -692,12 +731,22 @@ class App(tk.Tk):
         # ── 生成按鈕 ───────────────────────────────────────────
         def _generate():
             rows = sheet.data
-            def _with_kg(v):
+            def _kgs(v):
                 v = str(v).strip()
                 return (v + "kgs") if v and not v.lower().endswith("kgs") else v
+            def _s(v): return str(v).strip()
+            def _g(r, i): return _s(r[i]) if len(r) > i else ""
+            tpl = _tpl_var.get()
+            is_silver_top = (tpl == "上銀標")
             data_list = [
-                {"型號": str(r[0]).strip(), "荷重": _with_kg(r[1]), "製造序號": str(r[2]).strip()}
-                for r in rows if any(str(v).strip() for v in r)
+                {"型號": _s(r[0]), "荷重": _kgs(r[1]),
+                 "序號": _g(r, 7) if is_silver_top else _g(r, 2),
+                 "製造序號": _g(r, 2),
+                 "機台尺寸": _g(r, 3), "機台重量": _kgs(_g(r, 4)),
+                 "出廠年份": _g(r, 5),
+                 "供應商代碼": _g(r, 6), "機台序號": _g(r, 7),
+                 "訂單編號": _g(r, 8), "收貨人": _g(r, 9)}
+                for r in rows if any(str(r[i]).strip() for i in _COLS.get(tpl, [0, 1, 2]) if i < len(r))
             ]
             if not data_list:
                 messagebox.showwarning("無資料", "請先填入標籤資料", parent=win)
