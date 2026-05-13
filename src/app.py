@@ -14,8 +14,9 @@ from generator_inspection import generate_inspection
 from generator_fix import generate_fix
 from generator_tag import generate_tag
 from generator_label import generate_labels
+from generator_schedule import generate_schedule
 
-from _paths import CONFIG_PATH, ICON_PATH
+from _paths import CONFIG_PATH, ICON_PATH, OUTPUT_DIR
 
 def _load_config():
     if CONFIG_PATH.exists():
@@ -94,16 +95,19 @@ class App(tk.Tk):
         tab_insp  = tk.Frame(nb, bg=BG)
         tab_fix   = tk.Frame(nb, bg=BG)
         tab_label = tk.Frame(nb, bg=BG)
+        tab_sched = tk.Frame(nb, bg=BG)
 
         nb.add(tab_ship,  text="  出貨單  ")
         nb.add(tab_insp,  text="  驗機單  ")
         nb.add(tab_fix,   text="  維修單  ")
         nb.add(tab_label, text="  標籤生成  ")
+        nb.add(tab_sched, text="  出貨排程  ")
 
         self._build_tab_shipping(tab_ship,  PAD, FONT, FONTB, BG)
         self._build_tab_inspection(tab_insp, PAD, FONT, FONTB, BG)
         self._build_tab_fix(tab_fix,        PAD, FONT, FONTB, BG)
         self._build_tab_label(tab_label,    FONT, FONTB, BG)
+        self._build_tab_schedule(tab_sched, FONT, FONTB, BG)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -474,6 +478,96 @@ class App(tk.Tk):
         gf.pack(fill="x", padx=12)
         tk.Button(gf, text="🖨  生成標籤 PDF", command=_generate,
                   bg="#1e8449", fg="white", relief="flat",
+                  font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
+
+    # ── Tab 5：出貨排程 ───────────────────────────────────────
+    def _build_tab_schedule(self, parent, FONT, FONTB, BG):
+        from tkcalendar import DateEntry
+        GRAY   = "#5d6d7e"
+        FONT_S = ("Microsoft JhengHei", 9)
+
+        # ── Credential section ────────────────────────────
+        cred_frame = tk.LabelFrame(parent, text="Timetree 登入憑證", bg=BG, font=FONTB)
+        cred_frame.pack(fill="x", padx=12, pady=(12, 4))
+        cred_frame.columnconfigure(1, weight=1)
+
+        tt_cfg = self._config.get("timetree", {})
+
+        sid_var  = tk.StringVar(value=tt_cfg.get("session_id", ""))
+        csrf_var = tk.StringVar(value=tt_cfg.get("csrf_token", ""))
+
+        tk.Label(cred_frame, text="Session ID：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
+        sid_entry = tk.Entry(cred_frame, textvariable=sid_var, font=FONT_S, show="*")
+        sid_entry.grid(row=0, column=1, sticky="ew", padx=8, pady=3)
+
+        tk.Label(cred_frame, text="CSRF Token：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=3)
+        csrf_entry = tk.Entry(cred_frame, textvariable=csrf_var, font=FONT_S, show="*")
+        csrf_entry.grid(row=1, column=1, sticky="ew", padx=8, pady=3)
+
+        def _show_hide(entry, btn):
+            if entry.cget("show") == "*":
+                entry.config(show="")
+                btn.config(text="隱藏")
+            else:
+                entry.config(show="*")
+                btn.config(text="顯示")
+
+        btn_show_sid  = tk.Button(cred_frame, text="顯示", font=FONT_S,
+                                  command=lambda: _show_hide(sid_entry,  btn_show_sid))
+        btn_show_sid.grid(row=0, column=2, padx=(0, 8), pady=3)
+        btn_show_csrf = tk.Button(cred_frame, text="顯示", font=FONT_S,
+                                  command=lambda: _show_hide(csrf_entry, btn_show_csrf))
+        btn_show_csrf.grid(row=1, column=2, padx=(0, 8), pady=3)
+
+        def _save_creds():
+            self._config.setdefault("timetree", {})
+            self._config["timetree"]["session_id"] = sid_var.get().strip()
+            self._config["timetree"]["csrf_token"]  = csrf_var.get().strip()
+            _save_config(self._config)
+            messagebox.showinfo("已儲存", "Timetree 憑證已儲存", parent=parent)
+
+        tk.Button(cred_frame, text="儲存憑證", command=_save_creds,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT, padx=8).grid(row=2, column=1, sticky="w", padx=8, pady=(4, 6))
+
+        # ── Date + generate section ───────────────────────
+        gen_frame = tk.LabelFrame(parent, text="生成排程", bg=BG, font=FONTB)
+        gen_frame.pack(fill="x", padx=12, pady=4)
+        gen_frame.columnconfigure(1, weight=1)
+
+        tk.Label(gen_frame, text="日期：", bg=BG, font=FONT, anchor="w"
+                 ).grid(row=0, column=0, sticky="w", padx=8, pady=6)
+        date_entry = DateEntry(gen_frame, font=FONT, date_pattern="yyyy/mm/dd",
+                               background="#2e86c1", foreground="white", width=14)
+        date_entry.grid(row=0, column=1, sticky="w", padx=8, pady=6)
+
+        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
+                             anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(2, 0))
+
+        def _generate_schedule():
+            sid  = sid_var.get().strip()
+            csrf = csrf_var.get().strip()
+            if not sid or not csrf:
+                messagebox.showwarning("憑證未填", "請先填入 Session ID 與 CSRF Token", parent=parent)
+                return
+            target = date_entry.get_date()
+            try:
+                out = generate_schedule(target, OUTPUT_DIR, sid, csrf)
+                out_label.config(text=f"✔  已儲存：{out}", fg="#1e8449")
+                if messagebox.askyesno("生成成功",
+                        f"排程已生成：\n{out}\n\n是否立即開啟？", parent=parent):
+                    os.startfile(str(out))
+            except Exception as e:
+                out_label.config(text=f"✘  {e}", fg="#c0392b")
+                messagebox.showerror("生成失敗", str(e), parent=parent)
+
+        bb = tk.Frame(parent, bg=BG, pady=8)
+        bb.pack(fill="x", padx=12)
+        tk.Button(bb, text="📅  生成出貨排程 Excel", command=_generate_schedule,
+                  bg="#1a5276", fg="white", relief="flat",
                   font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
 
     # ════════════════════════════════════════════════════════
