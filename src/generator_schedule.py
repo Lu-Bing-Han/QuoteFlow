@@ -28,6 +28,13 @@ _TEMPLATE   = TEMPLATE_DIR / "template_schedule.xlsx"
 _TW_TZ      = timezone(timedelta(hours=8))
 
 
+def _extract_seq(title: str) -> float:
+    """Return leading (N) sequence number, or inf if absent."""
+    t = re.sub(r'【[^】]*】', '', title).strip()
+    m = re.match(r'^\((\d+)\)', t)
+    return int(m.group(1)) if m else float('inf')
+
+
 def _extract_company(title: str) -> str:
     """Return company name, stripping 【...】, (N), (拉回) leading prefixes."""
     t = re.sub(r'【[^】]*】', '', title).strip()
@@ -86,8 +93,8 @@ def fetch_events(target: date_type, session_id: str, csrf_token: str) -> list:
         if dt.date() == target:
             result.append({**ev, "_dt": dt})
 
-    # all-day events first, then by start time
-    result.sort(key=lambda e: (not e.get("all_day"), e["_dt"]))
+    # numbered (N) events first in numeric order, then all-day, then by start time
+    result.sort(key=lambda e: (_extract_seq(e.get("title", "")), not e.get("all_day"), e["_dt"]))
     return result
 
 
