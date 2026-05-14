@@ -14,7 +14,7 @@ from generator_inspection import generate_inspection
 from generator_fix import generate_fix
 from generator_tag import generate_tag
 from generator_label import generate_labels
-from generator_schedule import generate_schedule
+from generator_schedule import generate_schedule, fetch_events, events_to_rows
 
 from _paths import CONFIG_PATH, ICON_PATH
 
@@ -536,13 +536,14 @@ class App(tk.Tk):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei", 9)
 
+        _rows = []  # list of {"ev": dict, "location": str, "note_suffix": str}
+
         # ── Credential section ────────────────────────────
         cred_frame = tk.LabelFrame(parent, text="Timetree 登入憑證", bg=BG, font=FONTB)
         cred_frame.pack(fill="x", padx=12, pady=(12, 4))
         cred_frame.columnconfigure(1, weight=1)
 
         tt_cfg = self._config.get("timetree", {})
-
         sid_var  = tk.StringVar(value=tt_cfg.get("session_id", ""))
         csrf_var = tk.StringVar(value=tt_cfg.get("csrf_token", ""))
 
@@ -582,41 +583,176 @@ class App(tk.Tk):
                   bg="#2e86c1", fg="white", relief="flat",
                   font=FONT, padx=8).grid(row=2, column=1, sticky="w", padx=8, pady=(4, 6))
 
-        # ── Date + generate section ───────────────────────
-        gen_frame = tk.LabelFrame(parent, text="生成排程", bg=BG, font=FONTB)
-        gen_frame.pack(fill="x", padx=12, pady=4)
-        gen_frame.columnconfigure(1, weight=1)
+        # ── Preview section ───────────────────────────────
+        prev_frame = tk.LabelFrame(parent, text="排程預覽", bg=BG, font=FONTB)
+        prev_frame.pack(fill="both", expand=True, padx=12, pady=4)
 
-        tk.Label(gen_frame, text="日期：", bg=BG, font=FONT, anchor="w"
-                 ).grid(row=0, column=0, sticky="w", padx=8, pady=6)
-        date_entry = DateEntry(gen_frame, font=FONT, date_pattern="yyyy/mm/dd",
+        # Date + fetch row
+        date_row = tk.Frame(prev_frame, bg=BG)
+        date_row.pack(fill="x", padx=8, pady=(6, 4))
+        tk.Label(date_row, text="日期：", bg=BG, font=FONT).pack(side="left")
+        date_entry = DateEntry(date_row, font=FONT, date_pattern="yyyy/mm/dd",
                                background="#2e86c1", foreground="white", width=14)
-        date_entry.grid(row=0, column=1, sticky="w", padx=8, pady=6)
+        date_entry.pack(side="left", padx=(0, 6))
 
-        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
-                             anchor="w", wraplength=700)
-        out_label.pack(fill="x", padx=16, pady=(2, 0))
+        fetch_status = tk.Label(date_row, text="", bg=BG, font=FONT_S, fg=GRAY)
+        fetch_status.pack(side="left", padx=8)
 
-        def _generate_schedule():
+        # Treeview
+        tree_frame = tk.Frame(prev_frame, bg=BG)
+        tree_frame.pack(fill="both", expand=True, padx=8, pady=(0, 2))
+
+        cols = ("seq", "location", "note")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
+                            height=7, selectmode="browse")
+        tree.heading("seq",      text="順序")
+        tree.heading("location", text="地點")
+        tree.heading("note",     text="備註")
+        tree.column("seq",      width=45,  anchor="center", stretch=False)
+        tree.column("location", width=180, anchor="w",      stretch=False)
+        tree.column("note",     width=260, anchor="w",      stretch=True)
+        tree.pack(side="left", fill="both", expand=True)
+
+        sb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        sb.pack(side="right", fill="y")
+        tree.configure(yscrollcommand=sb.set)
+
+        def _refresh_tree():
+            tree.delete(*tree.get_children())
+            for i, row in enumerate(_rows, 1):
+                tree.insert("", "end", values=(i, row["location"], row["note_suffix"]))
+
+        # Row action buttons
+        btn_row = tk.Frame(prev_frame, bg=BG)
+        btn_row.pack(fill="x", padx=8, pady=(2, 8))
+
+        def _move(delta):
+            sel = tree.selection()
+            if not sel:
+                return
+            idx = tree.index(sel[0])
+            new_idx = idx + delta
+            if 0 <= new_idx < len(_rows):
+                _rows[idx], _rows[new_idx] = _rows[new_idx], _rows[idx]
+                _refresh_tree()
+                tree.selection_set(tree.get_children()[new_idx])
+
+        def _delete_row():
+            sel = tree.selection()
+            if not sel:
+                return
+            _rows.pop(tree.index(sel[0]))
+            _refresh_tree()
+
+        def _open_row_dialog(title, location="", note_suffix="", on_confirm=None):
+            dlg = tk.Toplevel(parent)
+            dlg.title(title)
+            dlg.resizable(False, False)
+            dlg.grab_set()
+
+            tk.Label(dlg, text="地點：", font=FONT).grid(row=0, column=0, padx=10, pady=6, sticky="w")
+            loc_var = tk.StringVar(value=location)
+            tk.Entry(dlg, textvariable=loc_var, font=FONT, width=28
+                     ).grid(row=0, column=1, padx=10, pady=6)
+
+            tk.Label(dlg, text="備註：", font=FONT).grid(row=1, column=0, padx=10, pady=6, sticky="w")
+            note_var = tk.StringVar(value=note_suffix)
+            tk.Entry(dlg, textvariable=note_var, font=FONT, width=28
+                     ).grid(row=1, column=1, padx=10, pady=6)
+
+            def _confirm():
+                if on_confirm:
+                    on_confirm(loc_var.get().strip(), note_var.get().strip())
+                dlg.destroy()
+
+            tk.Button(dlg, text="確認", command=_confirm,
+                      bg="#1a5276", fg="white", relief="flat",
+                      font=FONT, padx=10).grid(row=2, column=1, sticky="e", padx=10, pady=8)
+
+        def _edit_row(_event=None):
+            sel = tree.selection()
+            if not sel:
+                return
+            idx = tree.index(sel[0])
+            row = _rows[idx]
+
+            def _apply(loc, note):
+                _rows[idx]["location"]    = loc
+                _rows[idx]["note_suffix"] = note
+                _refresh_tree()
+
+            _open_row_dialog("編輯事件", row["location"], row["note_suffix"], _apply)
+
+        def _add_row():
+            def _apply(loc, note):
+                if not loc:
+                    return
+                _rows.append({"ev": {}, "location": loc, "note_suffix": note})
+                _refresh_tree()
+                tree.selection_set(tree.get_children()[-1])
+
+            _open_row_dialog("新增事件", on_confirm=_apply)
+
+        tree.bind("<Double-1>", _edit_row)
+
+        for text, cmd, color in [
+            ("↑ 上移",  lambda: _move(-1), "#5d6d7e"),
+            ("↓ 下移",  lambda: _move(1),  "#5d6d7e"),
+            ("➕ 新增", _add_row,          "#117a65"),
+            ("✏ 編輯",  _edit_row,         "#1a5276"),
+            ("🗑 刪除", _delete_row,       "#922b21"),
+        ]:
+            tk.Button(btn_row, text=text, command=cmd,
+                      bg=color, fg="white", relief="flat",
+                      font=FONT_S, padx=8, pady=3).pack(side="left", padx=(0, 6))
+
+        def _fetch_preview():
             sid  = sid_var.get().strip()
             csrf = csrf_var.get().strip()
             if not sid or not csrf:
                 messagebox.showwarning("憑證未填", "請先填入 Session ID 與 CSRF Token", parent=parent)
                 return
             target = date_entry.get_date()
+            fetch_status.config(text="抓取中…", fg=GRAY)
+            parent.update_idletasks()
             try:
-                out = generate_schedule(target, sid, csrf)
-                out_label.config(text=f"✔  已儲存：{out}", fg="#1e8449")
-                if messagebox.askyesno("生成成功",
-                        f"排程已生成：\n{out}\n\n是否立即開啟？", parent=parent):
+                evs = fetch_events(target, sid, csrf)
+                _rows.clear()
+                _rows.extend(events_to_rows(evs))
+                _refresh_tree()
+                fetch_status.config(text=f"找到 {len(evs)} 筆事件", fg="#1e8449")
+            except Exception as e:
+                fetch_status.config(text=f"✘ {e}", fg="#c0392b")
+
+        tk.Button(date_row, text="🔍 抓取", command=_fetch_preview,
+                  bg="#117a65", fg="white", relief="flat",
+                  font=FONT, padx=8).pack(side="left")
+
+        # ── Write button ──────────────────────────────────
+        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
+                             anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(2, 0))
+
+        def _write_schedule():
+            if not _rows:
+                messagebox.showwarning("無資料", "請先抓取並確認事件清單", parent=parent)
+                return
+            sid  = sid_var.get().strip()
+            csrf = csrf_var.get().strip()
+            target = date_entry.get_date()
+            try:
+                out = generate_schedule(target, sid, csrf, rows=list(_rows))
+                out_label.config(text=f"✔  已寫入：{out}", fg="#1e8449")
+                if messagebox.askyesno("寫入成功",
+                        f"排程已寫入：\n{out}\n\n是否立即開啟？", parent=parent):
                     os.startfile(str(out))
             except Exception as e:
                 out_label.config(text=f"✘  {e}", fg="#c0392b")
-                messagebox.showerror("生成失敗", str(e), parent=parent)
+                messagebox.showerror("寫入失敗", str(e), parent=parent)
 
         bb = tk.Frame(parent, bg=BG, pady=8)
         bb.pack(fill="x", padx=12)
-        tk.Button(bb, text="📅  生成出貨排程 Excel", command=_generate_schedule,
+        tk.Button(bb, text="✅  確認寫入出貨行程表.xlsx", command=_write_schedule,
                   bg="#1a5276", fg="white", relief="flat",
                   font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
 
