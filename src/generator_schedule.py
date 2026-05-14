@@ -13,6 +13,8 @@ from openpyxl.cell.text import InlineFont
 
 from _paths import TEMPLATE_DIR, OUTPUT_DIR
 
+_SCHEDULE_FILE = Path(r"Z:\會計\5.出貨相關\出貨行程表.xlsx")
+
 _RED    = "FFFF0000"
 _THIN   = Side(style="thin")
 _THICK  = Side(style="thick")
@@ -89,11 +91,10 @@ def fetch_events(target: date_type, session_id: str, csrf_token: str) -> list:
     return result
 
 
-def generate_schedule(target: date_type, output_dir: Path,
-                      session_id: str, csrf_token: str) -> Path:
+def generate_schedule(target: date_type, session_id: str, csrf_token: str) -> Path:
     events = fetch_events(target, session_id, csrf_token)
 
-    wb = openpyxl.load_workbook(str(_TEMPLATE))
+    wb = openpyxl.load_workbook(str(_SCHEDULE_FILE))
 
     roc_year = target.year - 1911
     sheet_name = f"{roc_year}年{target.month}月{target.day}日"
@@ -130,7 +131,7 @@ def generate_schedule(target: date_type, output_dir: Path,
     # Header row
     ws["A1"] = f"{target.month:02d}/{target.day:02d}行程順序"
     ws["C1"] = "地點"
-    ws["G1"] = "Google時間"
+    ws.cell(row=1, column=7, value="Google時間").alignment = _CENTER
     ws.cell(row=1, column=8, value="備註").alignment = _CENTER
     _merge_ab_cf(1, center_c=True)
 
@@ -175,8 +176,6 @@ def generate_schedule(target: date_type, output_dir: Path,
     )
     _merge_gh_border(footer_r + 2)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / f"{target.strftime('%Y-%m-%d')}.xlsx"
-    wb.save(str(out_path))
+    wb.save(str(_SCHEDULE_FILE))
     wb.close()
-    return out_path
+    return _SCHEDULE_FILE

@@ -16,7 +16,7 @@ from generator_tag import generate_tag
 from generator_label import generate_labels
 from generator_schedule import generate_schedule
 
-from _paths import CONFIG_PATH, ICON_PATH, OUTPUT_DIR
+from _paths import CONFIG_PATH, ICON_PATH
 
 def _load_config():
     if CONFIG_PATH.exists():
@@ -605,7 +605,7 @@ class App(tk.Tk):
                 return
             target = date_entry.get_date()
             try:
-                out = generate_schedule(target, OUTPUT_DIR, sid, csrf)
+                out = generate_schedule(target, sid, csrf)
                 out_label.config(text=f"✔  已儲存：{out}", fg="#1e8449")
                 if messagebox.askyesno("生成成功",
                         f"排程已生成：\n{out}\n\n是否立即開啟？", parent=parent):
@@ -644,11 +644,6 @@ class App(tk.Tk):
                     item["seq"], item.get("part_no", ""),
                     item["qty"], item["unit"], "", ""))
             self._fill_vars["sale_no"].set(h.get("quote_no", ""))
-            part_nos = [item.get("part_no", "") or item.get("name", "")
-                        for item in data["items"]]
-            self._tag_partno_cb["values"] = part_nos
-            if part_nos:
-                self._tag_partno_var.set(part_nos[0])
         except Exception as e:
             messagebox.showerror("讀取失敗", f"無法解析報價單：\n{e}")
 
