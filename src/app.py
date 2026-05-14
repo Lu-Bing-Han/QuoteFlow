@@ -14,9 +14,15 @@ from generator_inspection import generate_inspection
 from generator_fix import generate_fix
 from generator_tag import generate_tag
 from generator_label import generate_labels
-from generator_schedule import generate_schedule, fetch_events, events_to_rows
+from generator_schedule import generate_schedule, fetch_events, events_to_rows, calculate_travel_times
+from syncer_trello import fetch_po_cards
+from syncer_sheets import sync_cards
 
-from _paths import CONFIG_PATH, ICON_PATH
+from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
+
+_GSHEETS_TOKEN_PATH  = EXE_DIR  / "gsheets_token.json"
+_SYNCED_CARDS_PATH   = EXE_DIR  / "synced_cards.json"
+_GSHEETS_CREDS_PATH  = TEMPLATE_DIR / "credentials.json"
 
 def _load_config():
     if CONFIG_PATH.exists():
@@ -96,21 +102,24 @@ class App(tk.Tk):
         tab_fix   = tk.Frame(nb, bg=BG)
         tab_tag   = tk.Frame(nb, bg=BG)
         tab_label = tk.Frame(nb, bg=BG)
-        tab_sched = tk.Frame(nb, bg=BG)
+        tab_sched    = tk.Frame(nb, bg=BG)
+        tab_overview = tk.Frame(nb, bg=BG)
 
-        nb.add(tab_ship,  text="  出貨單  ")
-        nb.add(tab_insp,  text="  驗機單  ")
-        nb.add(tab_fix,   text="  維修單  ")
-        nb.add(tab_tag,   text="  維修掛件  ")
-        nb.add(tab_label, text="  標籤生成  ")
-        nb.add(tab_sched, text="  出貨排程  ")
+        nb.add(tab_ship,     text="  出貨單  ")
+        nb.add(tab_insp,     text="  驗機單  ")
+        nb.add(tab_fix,      text="  維修單  ")
+        nb.add(tab_tag,      text="  維修掛件  ")
+        nb.add(tab_label,    text="  標籤生成  ")
+        nb.add(tab_sched,    text="  出貨排程  ")
+        nb.add(tab_overview, text="  出貨一覽表  ")
 
-        self._build_tab_shipping(tab_ship,  PAD, FONT, FONTB, BG)
-        self._build_tab_inspection(tab_insp, PAD, FONT, FONTB, BG)
-        self._build_tab_fix(tab_fix,        PAD, FONT, FONTB, BG)
-        self._build_tab_tag(tab_tag,        PAD, FONT, FONTB, BG)
-        self._build_tab_label(tab_label,    FONT, FONTB, BG)
-        self._build_tab_schedule(tab_sched, FONT, FONTB, BG)
+        self._build_tab_shipping(tab_ship,    PAD, FONT, FONTB, BG)
+        self._build_tab_inspection(tab_insp,  PAD, FONT, FONTB, BG)
+        self._build_tab_fix(tab_fix,          PAD, FONT, FONTB, BG)
+        self._build_tab_tag(tab_tag,          PAD, FONT, FONTB, BG)
+        self._build_tab_label(tab_label,      FONT, FONTB, BG)
+        self._build_tab_schedule(tab_sched,   FONT, FONTB, BG)
+        self._build_tab_overview(tab_overview, FONT, FONTB, BG)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -536,7 +545,7 @@ class App(tk.Tk):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei", 9)
 
-        _rows = []  # list of {"ev": dict, "location": str, "note_suffix": str}
+        _rows = []  # list of {"ev": dict, "location": str, "note_suffix": str, "travel_time": str}
 
         # ── Credential section ────────────────────────────
         cred_frame = tk.LabelFrame(parent, text="Timetree 登入憑證", bg=BG, font=FONTB)
@@ -583,6 +592,39 @@ class App(tk.Tk):
                   bg="#2e86c1", fg="white", relief="flat",
                   font=FONT, padx=8).grid(row=2, column=1, sticky="w", padx=8, pady=(4, 6))
 
+        # ── Google Maps 設定 ──────────────────────────────
+        maps_frame = tk.LabelFrame(parent, text="Google Maps（行車時間）", bg=BG, font=FONTB)
+        maps_frame.pack(fill="x", padx=12, pady=(0, 4))
+        maps_frame.columnconfigure(1, weight=1)
+
+        gm_cfg     = self._config.get("google_maps", {})
+        gm_key_var = tk.StringVar(value=gm_cfg.get("api_key", ""))
+        gm_org_var = tk.StringVar(value=gm_cfg.get("origin",  "406臺中市北屯區水景里景南巷1-1號"))
+
+        tk.Label(maps_frame, text="API Key：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
+        gm_key_entry = tk.Entry(maps_frame, textvariable=gm_key_var, font=FONT_S, show="*")
+        gm_key_entry.grid(row=0, column=1, sticky="ew", padx=8, pady=3)
+        btn_gm_key = tk.Button(maps_frame, text="顯示", font=FONT_S,
+                               command=lambda: _show_hide(gm_key_entry, btn_gm_key))
+        btn_gm_key.grid(row=0, column=2, padx=(0, 8), pady=3)
+
+        tk.Label(maps_frame, text="出發地：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=3)
+        tk.Entry(maps_frame, textvariable=gm_org_var, font=FONT_S
+                 ).grid(row=1, column=1, columnspan=2, sticky="ew", padx=8, pady=3)
+
+        def _save_maps_cfg():
+            self._config.setdefault("google_maps", {})
+            self._config["google_maps"]["api_key"] = gm_key_var.get().strip()
+            self._config["google_maps"]["origin"]  = gm_org_var.get().strip()
+            _save_config(self._config)
+            messagebox.showinfo("已儲存", "Google Maps 設定已儲存", parent=parent)
+
+        tk.Button(maps_frame, text="儲存設定", command=_save_maps_cfg,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT, padx=8).grid(row=2, column=1, sticky="w", padx=8, pady=(4, 6))
+
         # ── Preview section ───────────────────────────────
         prev_frame = tk.LabelFrame(parent, text="排程預覽", bg=BG, font=FONTB)
         prev_frame.pack(fill="both", expand=True, padx=12, pady=4)
@@ -602,15 +644,17 @@ class App(tk.Tk):
         tree_frame = tk.Frame(prev_frame, bg=BG)
         tree_frame.pack(fill="both", expand=True, padx=8, pady=(0, 2))
 
-        cols = ("seq", "location", "note")
+        cols = ("seq", "location", "note", "travel_time")
         tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
                             height=7, selectmode="browse")
-        tree.heading("seq",      text="順序")
-        tree.heading("location", text="地點")
-        tree.heading("note",     text="備註")
-        tree.column("seq",      width=45,  anchor="center", stretch=False)
-        tree.column("location", width=180, anchor="w",      stretch=False)
-        tree.column("note",     width=260, anchor="w",      stretch=True)
+        tree.heading("seq",         text="順序")
+        tree.heading("location",    text="地點")
+        tree.heading("note",        text="備註")
+        tree.heading("travel_time", text="行車時間")
+        tree.column("seq",         width=45,  anchor="center", stretch=False)
+        tree.column("location",    width=160, anchor="w",      stretch=False)
+        tree.column("note",        width=200, anchor="w",      stretch=True)
+        tree.column("travel_time", width=75,  anchor="center", stretch=False)
         tree.pack(side="left", fill="both", expand=True)
 
         sb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
@@ -620,7 +664,8 @@ class App(tk.Tk):
         def _refresh_tree():
             tree.delete(*tree.get_children())
             for i, row in enumerate(_rows, 1):
-                tree.insert("", "end", values=(i, row["location"], row["note_suffix"]))
+                tree.insert("", "end", values=(
+                    i, row["location"], row["note_suffix"], row.get("travel_time", "")))
 
         # Row action buttons
         btn_row = tk.Frame(prev_frame, bg=BG)
@@ -687,7 +732,7 @@ class App(tk.Tk):
             def _apply(loc, note):
                 if not loc:
                     return
-                _rows.append({"ev": {}, "location": loc, "note_suffix": note})
+                _rows.append({"ev": {}, "location": loc, "note_suffix": note, "travel_time": ""})
                 _refresh_tree()
                 tree.selection_set(tree.get_children()[-1])
 
@@ -695,12 +740,43 @@ class App(tk.Tk):
 
         tree.bind("<Double-1>", _edit_row)
 
+        def _calc_travel():
+            if not _rows:
+                messagebox.showwarning("無資料", "請先抓取事件清單", parent=parent)
+                return
+            api_key = gm_key_var.get().strip()
+            origin  = gm_org_var.get().strip()
+            if not api_key:
+                messagebox.showwarning("未設定", "請先填入 Google Maps API Key", parent=parent)
+                return
+            fetch_status.config(text="計算行車時間中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                _, failed = calculate_travel_times(_rows, api_key, origin)
+                _refresh_tree()
+                if not failed:
+                    fetch_status.config(text="行車時間計算完成", fg="#1e8449")
+                else:
+                    detail = "\n".join(
+                        f"  第{seq}站「{loc}」— {status}" for seq, loc, status in failed
+                    )
+                    fetch_status.config(
+                        text=f"完成，{len(failed)} 筆失敗（地址找不到）", fg="#e67e22")
+                    messagebox.showwarning(
+                        "部分地址無法計算",
+                        f"以下站點無法取得行車時間：\n{detail}\n\n"
+                        "請在 Timetree 的「地點」欄位填入完整地址，或手動在備註中修改。",
+                        parent=parent)
+            except Exception as e:
+                fetch_status.config(text=f"✘ {e}", fg="#c0392b")
+
         for text, cmd, color in [
-            ("↑ 上移",  lambda: _move(-1), "#5d6d7e"),
-            ("↓ 下移",  lambda: _move(1),  "#5d6d7e"),
-            ("➕ 新增", _add_row,          "#117a65"),
-            ("✏ 編輯",  _edit_row,         "#1a5276"),
-            ("🗑 刪除", _delete_row,       "#922b21"),
+            ("↑ 上移",    lambda: _move(-1),  "#5d6d7e"),
+            ("↓ 下移",    lambda: _move(1),   "#5d6d7e"),
+            ("➕ 新增",   _add_row,            "#117a65"),
+            ("✏ 編輯",    _edit_row,           "#1a5276"),
+            ("🗑 刪除",   _delete_row,         "#922b21"),
+            ("📍 計算時間", _calc_travel,      "#6c3483"),
         ]:
             tk.Button(btn_row, text=text, command=cmd,
                       bg=color, fg="white", relief="flat",
@@ -753,6 +829,120 @@ class App(tk.Tk):
         bb = tk.Frame(parent, bg=BG, pady=8)
         bb.pack(fill="x", padx=12)
         tk.Button(bb, text="✅  確認寫入出貨行程表.xlsx", command=_write_schedule,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
+
+    # ════════════════════════════════════════════════════════
+    #  Tab 7：出貨一覽表
+    # ════════════════════════════════════════════════════════
+    def _build_tab_overview(self, parent, FONT, FONTB, BG):
+        GRAY   = "#5d6d7e"
+        FONT_S = ("Microsoft JhengHei", 9)
+
+        # ── Trello 憑證 ───────────────────────────────────
+        cred_frame = tk.LabelFrame(parent, text="Trello 憑證", bg=BG, font=FONTB)
+        cred_frame.pack(fill="x", padx=12, pady=(12, 4))
+        cred_frame.columnconfigure(1, weight=1)
+
+        tr_cfg   = self._config.get("trello", {})
+        key_var  = tk.StringVar(value=tr_cfg.get("api_key", ""))
+        tok_var  = tk.StringVar(value=tr_cfg.get("token",   ""))
+
+        tk.Label(cred_frame, text="API Key：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
+        key_entry = tk.Entry(cred_frame, textvariable=key_var, font=FONT_S, show="*")
+        key_entry.grid(row=0, column=1, sticky="ew", padx=8, pady=3)
+
+        tk.Label(cred_frame, text="Token：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=3)
+        tok_entry = tk.Entry(cred_frame, textvariable=tok_var, font=FONT_S, show="*")
+        tok_entry.grid(row=1, column=1, sticky="ew", padx=8, pady=3)
+
+        def _show_hide(entry, btn):
+            if entry.cget("show") == "*":
+                entry.config(show=""); btn.config(text="隱藏")
+            else:
+                entry.config(show="*"); btn.config(text="顯示")
+
+        btn_key = tk.Button(cred_frame, text="顯示", font=FONT_S,
+                            command=lambda: _show_hide(key_entry, btn_key))
+        btn_key.grid(row=0, column=2, padx=(0, 8), pady=3)
+        btn_tok = tk.Button(cred_frame, text="顯示", font=FONT_S,
+                            command=lambda: _show_hide(tok_entry, btn_tok))
+        btn_tok.grid(row=1, column=2, padx=(0, 8), pady=3)
+
+        def _save_trello_creds():
+            self._config.setdefault("trello", {})
+            self._config["trello"]["api_key"] = key_var.get().strip()
+            self._config["trello"]["token"]   = tok_var.get().strip()
+            _save_config(self._config)
+            messagebox.showinfo("已儲存", "Trello 憑證已儲存", parent=parent)
+
+        tk.Button(cred_frame, text="儲存憑證", command=_save_trello_creds,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT, padx=8).grid(row=2, column=1, sticky="w", padx=8, pady=(4, 6))
+
+        # ── Google Sheets 設定 ────────────────────────────
+        gs_frame = tk.LabelFrame(parent, text="Google Sheets", bg=BG, font=FONTB)
+        gs_frame.pack(fill="x", padx=12, pady=4)
+
+        creds_status = tk.Label(
+            gs_frame,
+            text="✔  credentials.json 已就緒" if _GSHEETS_CREDS_PATH.exists()
+                 else "✘  找不到 credentials.json（請放到 template 資料夾）",
+            bg=BG, font=FONT_S,
+            fg="#1e8449" if _GSHEETS_CREDS_PATH.exists() else "#c0392b",
+            anchor="w",
+        )
+        creds_status.pack(fill="x", padx=8, pady=6)
+
+        token_status = tk.Label(
+            gs_frame,
+            text="✔  已授權（gsheets_token.json 存在）" if _GSHEETS_TOKEN_PATH.exists()
+                 else "尚未授權，點「同步」時會自動開啟瀏覽器",
+            bg=BG, font=FONT_S,
+            fg="#1e8449" if _GSHEETS_TOKEN_PATH.exists() else GRAY,
+            anchor="w",
+        )
+        token_status.pack(fill="x", padx=8, pady=(0, 6))
+
+        # ── 同步按鈕與狀態 ────────────────────────────────
+        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
+                             anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(4, 0))
+
+        def _sync():
+            api_key = key_var.get().strip()
+            token   = tok_var.get().strip()
+            if not api_key or not token:
+                messagebox.showwarning("憑證未填", "請先填入 Trello API Key 與 Token", parent=parent)
+                return
+            if not _GSHEETS_CREDS_PATH.exists():
+                messagebox.showerror("缺少憑證", f"找不到 {_GSHEETS_CREDS_PATH}", parent=parent)
+                return
+
+            out_label.config(text="抓取 Trello 卡片中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                cards = fetch_po_cards(api_key, token)
+                out_label.config(text=f"找到 {len(cards)} 張卡片，同步至 Google Sheets…", fg=GRAY)
+                parent.update_idletasks()
+
+                added = sync_cards(cards, _GSHEETS_CREDS_PATH,
+                                   _GSHEETS_TOKEN_PATH, _SYNCED_CARDS_PATH)
+
+                token_status.config(text="✔  已授權（gsheets_token.json 存在）", fg="#1e8449")
+                if added:
+                    out_label.config(text=f"✔  同步完成，新增 {added} 筆資料", fg="#1e8449")
+                else:
+                    out_label.config(text="✔  同步完成，無新卡片", fg="#1e8449")
+            except Exception as e:
+                out_label.config(text=f"✘  {e}", fg="#c0392b")
+                messagebox.showerror("同步失敗", str(e), parent=parent)
+
+        bb = tk.Frame(parent, bg=BG, pady=8)
+        bb.pack(fill="x", padx=12)
+        tk.Button(bb, text="🔄  同步 Trello → Google Sheets", command=_sync,
                   bg="#1a5276", fg="white", relief="flat",
                   font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
 

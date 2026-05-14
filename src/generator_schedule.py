@@ -100,10 +100,67 @@ def fetch_events(target: date_type, session_id: str, csrf_token: str) -> list:
 def events_to_rows(events: list) -> list:
     """Convert event list to row dicts for GUI preview/editing.
 
-    Each row: {"ev": dict, "location": str, "note_suffix": str}
+    Each row: {"ev": dict, "location": str, "note_suffix": str, "travel_time": str}
     """
-    return [{"ev": ev, "location": _location_cell(ev), "note_suffix": _note_suffix(ev)}
+    return [{"ev": ev, "location": _location_cell(ev),
+             "note_suffix": _note_suffix(ev), "travel_time": ""}
             for ev in events]
+
+
+def _maps_query(row: dict) -> str:
+    """Extract best address string for Google Maps from a row."""
+    loc = (row["ev"].get("location") or "").strip()
+    if loc:
+        return loc
+    m = re.search(r'\(([^)]+)\)', row["location"])
+    return m.group(1) if m else row["location"]
+
+
+def _format_duration(seconds: int) -> str:
+    minutes = round(seconds / 60)
+    if minutes < 60:
+        return f"{minutes}分"
+    h, m = divmod(minutes, 60)
+    return f"{h}時{m}分" if m else f"{h}時"
+
+
+def calculate_travel_times(rows: list, api_key: str, origin: str) -> tuple:
+    """Call Google Maps Distance Matrix API for each stop and update travel_time in-place.
+
+    Returns (rows, failed_list) where failed_list contains (index, location, api_status).
+    """
+    _DM_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
+    failed = []
+    prev = origin
+    for i, row in enumerate(rows):
+        dest = _maps_query(row)
+        resp = requests.get(_DM_URL, params={
+            "origins":      prev,
+            "destinations": dest,
+            "mode":         "driving",
+            "language":     "zh-TW",
+            "key":          api_key,
+        }, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        top = data.get("status", "UNKNOWN")
+        if top != "OK":
+            row["travel_time"] = ""
+            failed.append((i + 1, dest, f"API錯誤:{top}"))
+            prev = dest
+            continue
+        try:
+            el = data["rows"][0]["elements"][0]
+            if el["status"] == "OK":
+                row["travel_time"] = _format_duration(el["duration"]["value"])
+            else:
+                row["travel_time"] = ""
+                failed.append((i + 1, dest, el["status"]))
+        except (IndexError, KeyError):
+            row["travel_time"] = ""
+            failed.append((i + 1, dest, "解析失敗"))
+        prev = dest
+    return rows, failed
 
 
 def generate_schedule(target: date_type, session_id: str, csrf_token: str,
@@ -159,6 +216,8 @@ def generate_schedule(target: date_type, session_id: str, csrf_token: str,
         r = i + 1
         ws.cell(row=r, column=1, value=i)
         ws.cell(row=r, column=3, value=row["location"])
+        if row.get("travel_time"):
+            ws.cell(row=r, column=7, value=row["travel_time"]).alignment = _CENTER
         _merge_ab_cf(r)
 
     _table_border(1, table_end)
