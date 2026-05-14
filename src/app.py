@@ -94,18 +94,21 @@ class App(tk.Tk):
         tab_ship  = tk.Frame(nb, bg=BG)
         tab_insp  = tk.Frame(nb, bg=BG)
         tab_fix   = tk.Frame(nb, bg=BG)
+        tab_tag   = tk.Frame(nb, bg=BG)
         tab_label = tk.Frame(nb, bg=BG)
         tab_sched = tk.Frame(nb, bg=BG)
 
         nb.add(tab_ship,  text="  出貨單  ")
         nb.add(tab_insp,  text="  驗機單  ")
         nb.add(tab_fix,   text="  維修單  ")
+        nb.add(tab_tag,   text="  維修掛件  ")
         nb.add(tab_label, text="  標籤生成  ")
         nb.add(tab_sched, text="  出貨排程  ")
 
         self._build_tab_shipping(tab_ship,  PAD, FONT, FONTB, BG)
         self._build_tab_inspection(tab_insp, PAD, FONT, FONTB, BG)
         self._build_tab_fix(tab_fix,        PAD, FONT, FONTB, BG)
+        self._build_tab_tag(tab_tag,        PAD, FONT, FONTB, BG)
         self._build_tab_label(tab_label,    FONT, FONTB, BG)
         self._build_tab_schedule(tab_sched, FONT, FONTB, BG)
 
@@ -243,79 +246,126 @@ class App(tk.Tk):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei", 9)
 
+        info = tk.LabelFrame(parent, text="說明", bg=BG, font=FONTB)
+        info.pack(fill="x", padx=12, pady=(12, 4))
+        tk.Label(info, text="載入報價單後，點擊下方按鈕生成維修單。",
+                 bg=BG, font=FONT, fg=GRAY).pack(padx=12, pady=8, anchor="w")
+
+        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf.pack(fill="x", padx=12, pady=4)
+        row = tk.Frame(pf, bg="#e8ecf0")
+        row.pack(fill="x")
+        tk.Label(row, text="輸出路徑：", bg="#e8ecf0", font=FONT_S,
+                 fg=GRAY, anchor="w", width=10).pack(side="left", padx=8)
+        tk.Label(row, text=r"Z:\出貨單\Quoteflow_output",
+                 bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left")
+
         bb = tk.Frame(parent, bg=BG, pady=8)
         bb.pack(side="bottom", fill="x", padx=12)
         tk.Button(bb, text="🔧  生成維修單", command=self._generate_fix,
                   bg="#d68910", fg="white", relief="flat",
                   font=("Microsoft JhengHei", 12, "bold"), pady=10).pack(fill="x")
 
-        pf = tk.Frame(parent, bg="#e8ecf0")
-        pf.pack(side="bottom", fill="x", padx=12, pady=(0, 2))
-        for label, path in [
-            ("出貨單",   r"Z:\出貨單\Quoteflow_output"),
-            ("維修掛件", r"Z:\待維修機台資料"),
-        ]:
-            row = tk.Frame(pf, bg="#e8ecf0")
-            row.pack(fill="x")
-            tk.Label(row, text=label + "：", bg="#e8ecf0", font=FONT_S,
-                     fg=GRAY, anchor="w", width=10).pack(side="left", padx=8)
-            tk.Label(row, text=path, bg="#e8ecf0", font=FONT_S,
-                     fg=GRAY).pack(side="left")
+    # ── Tab 4：維修掛件 ───────────────────────────────────────
+    def _build_tab_tag(self, parent, PAD, FONT, FONTB, BG):
+        from tkcalendar import DateEntry
+        GRAY = "#5d6d7e"
 
-        # 維修掛件
-        tgf = tk.LabelFrame(parent, text="維修掛件", bg=BG, font=FONTB)
+        tgf = tk.LabelFrame(parent, text="維修掛件資料", bg=BG, font=FONTB)
         tgf.pack(fill="x", padx=12, pady=(12, 4))
         tgf.columnconfigure(1, weight=1)
         tgf.columnconfigure(3, weight=1)
 
         self._tag_vars = {}
 
+        # 客戶名稱
+        cust_var = tk.StringVar()
+        self._tag_vars["customer"] = cust_var
+        tk.Label(tgf, text="客戶名稱：", bg=BG, anchor="w", font=FONT
+                 ).grid(row=0, column=0, sticky="w", padx=8, pady=2)
+        tk.Entry(tgf, textvariable=cust_var, font=FONT
+                 ).grid(row=0, column=1, sticky="ew", padx=8, pady=2)
+
+        def _load_customer():
+            if self._parsed_data:
+                cust_var.set(self._parsed_data["header"].get("customer", ""))
+                part_nos = [item.get("part_no", "") or item.get("name", "")
+                            for item in self._parsed_data.get("items", [])]
+                self._tag_partno_cb["values"] = part_nos
+                if part_nos:
+                    self._tag_partno_var.set(part_nos[0])
+            else:
+                messagebox.showwarning("尚未載入", "請先選擇並載入報價單", parent=parent)
+
+        tk.Button(tgf, text="從報價單帶入", command=_load_customer,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT, padx=6).grid(row=0, column=2, padx=8, pady=2)
+
+        # No.
         no_var = tk.StringVar(value="1")
         self._tag_vars["no"] = no_var
         tk.Label(tgf, text="No.：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=0, column=0, sticky="w", padx=8, pady=2)
+                 ).grid(row=1, column=0, sticky="w", padx=8, pady=2)
         ttk.Combobox(tgf, textvariable=no_var,
                      values=[str(i) for i in range(1, 21)],
-                     width=8, font=FONT).grid(row=0, column=1, sticky="w", padx=8, pady=2)
+                     width=8, font=FONT).grid(row=1, column=1, sticky="w", padx=8, pady=2)
 
+        # 品號
         self._tag_partno_var = tk.StringVar()
         self._tag_vars["part_no"] = self._tag_partno_var
         tk.Label(tgf, text="品號：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=0, column=2, sticky="w", padx=8, pady=2)
+                 ).grid(row=1, column=2, sticky="w", padx=8, pady=2)
         self._tag_partno_cb = ttk.Combobox(tgf, textvariable=self._tag_partno_var,
                                             font=FONT, width=20)
-        self._tag_partno_cb.grid(row=0, column=3, sticky="ew", padx=8, pady=2)
+        self._tag_partno_cb.grid(row=1, column=3, sticky="ew", padx=8, pady=2)
 
+        # 序號 / 拉回日期
         seq_var = tk.StringVar()
         self._tag_vars["seq_no"] = seq_var
         tk.Label(tgf, text="序號：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=1, column=0, sticky="w", padx=8, pady=2)
+                 ).grid(row=2, column=0, sticky="w", padx=8, pady=2)
         tk.Entry(tgf, textvariable=seq_var, font=FONT
-                 ).grid(row=1, column=1, sticky="ew", padx=8, pady=2)
+                 ).grid(row=2, column=1, sticky="ew", padx=8, pady=2)
 
-        from tkcalendar import DateEntry
         tk.Label(tgf, text="拉回：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=1, column=2, sticky="w", padx=8, pady=2)
+                 ).grid(row=2, column=2, sticky="w", padx=8, pady=2)
         self._tag_date_entry = DateEntry(
             tgf, font=FONT, date_pattern="yyyy/mm/dd",
             background="#2e86c1", foreground="white", width=14)
-        self._tag_date_entry.grid(row=1, column=3, sticky="w", padx=8, pady=2)
+        self._tag_date_entry.grid(row=2, column=3, sticky="w", padx=8, pady=2)
 
+        # 問題 / 維修狀況
         prob_var = tk.StringVar()
         self._tag_vars["problem"] = prob_var
         tk.Label(tgf, text="問題：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=2, column=0, sticky="w", padx=8, pady=2)
+                 ).grid(row=3, column=0, sticky="w", padx=8, pady=2)
         tk.Entry(tgf, textvariable=prob_var, font=FONT
-                 ).grid(row=2, column=1, sticky="ew", padx=8, pady=2)
+                 ).grid(row=3, column=1, sticky="ew", padx=8, pady=2)
 
         status_var = tk.StringVar()
         self._tag_vars["repair_status"] = status_var
         tk.Label(tgf, text="維修狀況：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=2, column=2, sticky="w", padx=8, pady=2)
+                 ).grid(row=3, column=2, sticky="w", padx=8, pady=2)
         tk.Entry(tgf, textvariable=status_var, font=FONT
-                 ).grid(row=2, column=3, sticky="ew", padx=8, pady=2)
+                 ).grid(row=3, column=3, sticky="ew", padx=8, pady=2)
 
-    # ── Tab 4：標籤生成 ───────────────────────────────────────
+        # 輸出路徑
+        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf.pack(fill="x", padx=12, pady=4)
+        tk.Label(pf, text="輸出路徑：", bg="#e8ecf0",
+                 font=("Microsoft JhengHei", 9), fg=GRAY,
+                 anchor="w", width=10).pack(side="left", padx=8, pady=6)
+        tk.Label(pf, text=r"Z:\待維修機台資料",
+                 bg="#e8ecf0", font=("Microsoft JhengHei", 9), fg=GRAY
+                 ).pack(side="left", pady=6)
+
+        bb = tk.Frame(parent, bg=BG, pady=8)
+        bb.pack(side="bottom", fill="x", padx=12)
+        tk.Button(bb, text="📋  生成維修掛件", command=self._generate_tag_doc,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei", 12, "bold"), pady=10).pack(fill="x")
+
+    # ── Tab 5：標籤生成 ───────────────────────────────────────
     def _build_tab_label(self, parent, FONT, FONTB, BG):
         from tksheet import Sheet
         import re as _re
@@ -797,37 +847,36 @@ class App(tk.Tk):
             "operator":       self._operator_var.get(),
             "invoice_choice": self._invoice_var.get(),
         }
-        tag_fields = [
-            self._tag_vars["seq_no"].get().strip(),
-            self._tag_vars["problem"].get().strip(),
-            self._tag_vars["repair_status"].get().strip(),
-        ]
-        gen_tag = True
-        if not any(tag_fields):
-            gen_tag = messagebox.askyesno(
-                "維修掛件未填寫",
-                "維修掛件欄位尚未填寫，是否仍要繼續生成維修單（不含掛件）？")
-            if not gen_tag:
-                return
         try:
             result = generate_fix(self._parsed_data, extra, output_dir=self._OUT_SHIPPING)
             paths  = result if isinstance(result, list) else [result]
-            if gen_tag and any(tag_fields):
-                tag_data = {
-                    "no":            self._tag_vars["no"].get(),
-                    "part_no":       self._tag_vars["part_no"].get(),
-                    "seq_no":        self._tag_vars["seq_no"].get(),
-                    "problem":       self._tag_vars["problem"].get(),
-                    "pullback_date": self._tag_date_entry.get_date().strftime("%Y/%m/%d"),
-                    "repair_status": self._tag_vars["repair_status"].get(),
-                }
-                paths.append(generate_tag(self._parsed_data, tag_data,
-                                          output_dir=self._OUT_TAG))
             msg = "\n".join(str(p) for p in paths)
             if messagebox.askyesno("生成成功",
                     f"已生成 {len(paths)} 份檔案：\n{msg}\n\n是否立即開啟？"):
                 for p in paths:
                     os.startfile(p) if sys.platform == "win32" else subprocess.run(["open", str(p)])
+        except Exception as e:
+            messagebox.showerror("生成失敗", str(e))
+
+    def _generate_tag_doc(self):
+        customer = self._tag_vars["customer"].get().strip()
+        if not customer:
+            messagebox.showwarning("客戶名稱未填", "請填入客戶名稱或從報價單帶入")
+            return
+        tag_data = {
+            "no":            self._tag_vars["no"].get(),
+            "part_no":       self._tag_vars["part_no"].get(),
+            "seq_no":        self._tag_vars["seq_no"].get(),
+            "problem":       self._tag_vars["problem"].get(),
+            "pullback_date": self._tag_date_entry.get_date().strftime("%Y/%m/%d"),
+            "repair_status": self._tag_vars["repair_status"].get(),
+        }
+        data = {"header": {"customer": customer}}
+        try:
+            path = generate_tag(data, tag_data, output_dir=self._OUT_TAG)
+            if messagebox.askyesno("生成成功",
+                    f"維修掛件已生成：\n{path}\n\n是否立即開啟？"):
+                os.startfile(str(path)) if sys.platform == "win32" else subprocess.run(["open", str(path)])
         except Exception as e:
             messagebox.showerror("生成失敗", str(e))
 
