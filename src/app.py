@@ -547,6 +547,24 @@ class App(tk.Tk):
 
         _rows = []  # list of {"ev": dict, "location": str, "note_suffix": str, "travel_time": str}
 
+        # 從 template_schedule.xlsx「地址工作區」C2:C29 載入地址選項
+        _addr_options: list[str] = []
+        try:
+            import openpyxl as _oxl
+            _tmpl_path = TEMPLATE_DIR / "template_schedule.xlsx"
+            if _tmpl_path.exists():
+                _wb = _oxl.load_workbook(str(_tmpl_path), read_only=True, data_only=True)
+                if "地址" in _wb.sheetnames:
+                    _ws = _wb["地址"]
+                    _addr_options = [
+                        str(_ws.cell(row=r, column=3).value).strip()
+                        for r in range(2, 30)
+                        if _ws.cell(row=r, column=3).value
+                    ]
+                _wb.close()
+        except Exception:
+            pass
+
         # ── Credential section ────────────────────────────
         cred_frame = tk.LabelFrame(parent, text="Timetree 登入憑證", bg=BG, font=FONTB)
         cred_frame.pack(fill="x", padx=12, pady=(12, 4))
@@ -661,11 +679,15 @@ class App(tk.Tk):
         sb.pack(side="right", fill="y")
         tree.configure(yscrollcommand=sb.set)
 
+        def _display_loc(location: str) -> str:
+            idx = location.find("(")
+            return location[:idx].strip() if idx != -1 else location
+
         def _refresh_tree():
             tree.delete(*tree.get_children())
             for i, row in enumerate(_rows, 1):
                 tree.insert("", "end", values=(
-                    i, row["location"], row["note_suffix"], row.get("travel_time", "")))
+                    i, _display_loc(row["location"]), row["note_suffix"], row.get("travel_time", "")))
 
         # Row action buttons
         btn_row = tk.Frame(prev_frame, bg=BG)
@@ -689,6 +711,14 @@ class App(tk.Tk):
             _rows.pop(tree.index(sel[0]))
             _refresh_tree()
 
+        # display name → full address 對應表
+        _addr_map = {}
+        for _full in _addr_options:
+            _idx = _full.find("(")
+            _disp = _full[:_idx].strip() if _idx != -1 else _full
+            _addr_map[_disp] = _full
+        _addr_display = list(_addr_map.keys())
+
         def _open_row_dialog(title, location="", note_suffix="", on_confirm=None):
             dlg = tk.Toplevel(parent)
             dlg.title(title)
@@ -696,9 +726,10 @@ class App(tk.Tk):
             dlg.grab_set()
 
             tk.Label(dlg, text="地點：", font=FONT).grid(row=0, column=0, padx=10, pady=6, sticky="w")
-            loc_var = tk.StringVar(value=location)
-            tk.Entry(dlg, textvariable=loc_var, font=FONT, width=28
-                     ).grid(row=0, column=1, padx=10, pady=6)
+            # 顯示用：只顯示公司名稱
+            loc_var = tk.StringVar(value=_display_loc(location))
+            cb = ttk.Combobox(dlg, textvariable=loc_var, font=FONT, width=26, values=_addr_display)
+            cb.grid(row=0, column=1, padx=10, pady=6)
 
             tk.Label(dlg, text="備註：", font=FONT).grid(row=1, column=0, padx=10, pady=6, sticky="w")
             note_var = tk.StringVar(value=note_suffix)
@@ -706,8 +737,11 @@ class App(tk.Tk):
                      ).grid(row=1, column=1, padx=10, pady=6)
 
             def _confirm():
+                typed = loc_var.get().strip()
+                # 從下拉選的 → 換回完整地址；手動輸入的 → 直接使用
+                full_loc = _addr_map.get(typed, typed)
                 if on_confirm:
-                    on_confirm(loc_var.get().strip(), note_var.get().strip())
+                    on_confirm(full_loc, note_var.get().strip())
                 dlg.destroy()
 
             tk.Button(dlg, text="確認", command=_confirm,
