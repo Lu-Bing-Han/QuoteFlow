@@ -2,6 +2,7 @@
 config.json
 gsheets_token.json
 synced_cards.json
+production_synced_cards.json
 template/credentials.json
 
 # 虛擬環境

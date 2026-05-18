@@ -17,12 +17,14 @@ from generator_label import generate_labels
 from generator_schedule import generate_schedule, fetch_events, events_to_rows, calculate_travel_times
 from syncer_trello import fetch_po_cards
 from syncer_sheets import sync_cards
+from syncer_production import sync_production, PRODUCTION_FILE as _PRODUCTION_EXCEL
 
 from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
 
-_GSHEETS_TOKEN_PATH  = EXE_DIR  / "gsheets_token.json"
-_SYNCED_CARDS_PATH   = EXE_DIR  / "synced_cards.json"
-_GSHEETS_CREDS_PATH  = TEMPLATE_DIR / "credentials.json"
+_GSHEETS_TOKEN_PATH      = EXE_DIR  / "gsheets_token.json"
+_SYNCED_CARDS_PATH       = EXE_DIR  / "synced_cards.json"
+_GSHEETS_CREDS_PATH      = TEMPLATE_DIR / "credentials.json"
+_PRODUCTION_SYNCED_PATH  = EXE_DIR  / "production_synced_cards.json"
 
 def _load_config():
     if CONFIG_PATH.exists():
@@ -71,8 +73,8 @@ class App(tk.Tk):
     # ════════════════════════════════════════════════════════
     def _build_ui(self):
         PAD   = {"padx": 12, "pady": 4}
-        FONT  = ("Microsoft JhengHei", 10)
-        FONTB = ("Microsoft JhengHei", 10, "bold")
+        FONT  = ("Microsoft JhengHei UI", 10)
+        FONTB = ("Microsoft JhengHei UI", 10, "bold")
         BG    = "#f4f6f8"
 
         # ── Top bar ──────────────────────────────────────────
@@ -80,10 +82,10 @@ class App(tk.Tk):
         top.pack(fill="x")
         tk.Label(top, text="立善科技｜報價單轉單工具",
                  bg="#1a5276", fg="white",
-                 font=("Microsoft JhengHei", 14, "bold")).pack(side="left", padx=16)
+                 font=("Microsoft JhengHei UI", 14, "bold")).pack(side="left", padx=16)
         tk.Button(top, text="選擇報價單 .xlsx ▶", command=self._open_file,
                   bg="#2e86c1", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 10), padx=10, pady=3).pack(side="right", padx=16)
+                  font=("Microsoft JhengHei UI", 10), padx=10, pady=3).pack(side="right", padx=16)
 
         self._file_label = tk.Label(self, text="⚠  尚未選擇報價單",
                                     bg=BG, fg="#c0392b", font=FONT)
@@ -104,6 +106,7 @@ class App(tk.Tk):
         tab_label = tk.Frame(nb, bg=BG)
         tab_sched    = tk.Frame(nb, bg=BG)
         tab_overview = tk.Frame(nb, bg=BG)
+        tab_prod     = tk.Frame(nb, bg=BG)
 
         nb.add(tab_ship,     text="  出貨單  ")
         nb.add(tab_insp,     text="  驗機單  ")
@@ -112,6 +115,7 @@ class App(tk.Tk):
         nb.add(tab_label,    text="  標籤生成  ")
         nb.add(tab_sched,    text="  出貨排程  ")
         nb.add(tab_overview, text="  出貨一覽表  ")
+        nb.add(tab_prod,     text="  生產群組紀錄  ")
 
         self._build_tab_shipping(tab_ship,    PAD, FONT, FONTB, BG)
         self._build_tab_inspection(tab_insp,  PAD, FONT, FONTB, BG)
@@ -120,6 +124,7 @@ class App(tk.Tk):
         self._build_tab_label(tab_label,      FONT, FONTB, BG)
         self._build_tab_schedule(tab_sched,   FONT, FONTB, BG)
         self._build_tab_overview(tab_overview, FONT, FONTB, BG)
+        self._build_tab_production(tab_prod,  FONT, FONTB, BG)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -134,7 +139,7 @@ class App(tk.Tk):
                   font=FONT, padx=10, pady=3).pack(side="left")
         tk.Button(bb, text="⬇  生成出貨單", command=self._generate,
                   bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 11, "bold"),
+                  font=("Microsoft JhengHei UI", 11, "bold"),
                   padx=16, pady=6).pack(side="right")
 
         # 欄位區
@@ -230,7 +235,7 @@ class App(tk.Tk):
     # ── Tab 2：驗機單 ─────────────────────────────────────────
     def _build_tab_inspection(self, parent, PAD, FONT, FONTB, BG):
         GRAY   = "#5d6d7e"
-        FONT_S = ("Microsoft JhengHei", 9)
+        FONT_S = ("Microsoft JhengHei UI", 9)
 
         info = tk.LabelFrame(parent, text="說明", bg=BG, font=FONTB)
         info.pack(fill="x", padx=12, pady=(12, 4))
@@ -248,12 +253,12 @@ class App(tk.Tk):
         bb.pack(side="bottom", fill="x", padx=12)
         tk.Button(bb, text="🔍  生成驗機單", command=self._generate_inspection,
                   bg="#6c3483", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 12, "bold"), pady=10).pack(fill="x")
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=10).pack(fill="x")
 
     # ── Tab 3：維修單 ─────────────────────────────────────────
     def _build_tab_fix(self, parent, PAD, FONT, FONTB, BG):
         GRAY   = "#5d6d7e"
-        FONT_S = ("Microsoft JhengHei", 9)
+        FONT_S = ("Microsoft JhengHei UI", 9)
 
         info = tk.LabelFrame(parent, text="說明", bg=BG, font=FONTB)
         info.pack(fill="x", padx=12, pady=(12, 4))
@@ -273,7 +278,7 @@ class App(tk.Tk):
         bb.pack(side="bottom", fill="x", padx=12)
         tk.Button(bb, text="🔧  生成維修單", command=self._generate_fix,
                   bg="#d68910", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 12, "bold"), pady=10).pack(fill="x")
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=10).pack(fill="x")
 
     # ── Tab 4：維修掛件 ───────────────────────────────────────
     def _build_tab_tag(self, parent, PAD, FONT, FONTB, BG):
@@ -362,17 +367,17 @@ class App(tk.Tk):
         pf = tk.Frame(parent, bg="#e8ecf0")
         pf.pack(fill="x", padx=12, pady=4)
         tk.Label(pf, text="輸出路徑：", bg="#e8ecf0",
-                 font=("Microsoft JhengHei", 9), fg=GRAY,
+                 font=("Microsoft JhengHei UI", 9), fg=GRAY,
                  anchor="w", width=10).pack(side="left", padx=8, pady=6)
         tk.Label(pf, text=r"Z:\待維修機台資料",
-                 bg="#e8ecf0", font=("Microsoft JhengHei", 9), fg=GRAY
+                 bg="#e8ecf0", font=("Microsoft JhengHei UI", 9), fg=GRAY
                  ).pack(side="left", pady=6)
 
         bb = tk.Frame(parent, bg=BG, pady=8)
         bb.pack(side="bottom", fill="x", padx=12)
         tk.Button(bb, text="📋  生成維修掛件", command=self._generate_tag_doc,
                   bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 12, "bold"), pady=10).pack(fill="x")
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=10).pack(fill="x")
 
     # ── Tab 5：標籤生成 ───────────────────────────────────────
     def _build_tab_label(self, parent, FONT, FONTB, BG):
@@ -537,13 +542,13 @@ class App(tk.Tk):
         gf.pack(fill="x", padx=12)
         tk.Button(gf, text="🖨  生成標籤 PDF", command=_generate,
                   bg="#1e8449", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
 
     # ── Tab 5：出貨排程 ───────────────────────────────────────
     def _build_tab_schedule(self, parent, FONT, FONTB, BG):
         from tkcalendar import DateEntry
         GRAY   = "#5d6d7e"
-        FONT_S = ("Microsoft JhengHei", 9)
+        FONT_S = ("Microsoft JhengHei UI", 9)
 
         _rows = []  # list of {"ev": dict, "location": str, "note_suffix": str, "travel_time": str}
 
@@ -864,14 +869,14 @@ class App(tk.Tk):
         bb.pack(fill="x", padx=12)
         tk.Button(bb, text="✅  確認寫入出貨行程表.xlsx", command=_write_schedule,
                   bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
 
     # ════════════════════════════════════════════════════════
     #  Tab 7：出貨一覽表
     # ════════════════════════════════════════════════════════
     def _build_tab_overview(self, parent, FONT, FONTB, BG):
         GRAY   = "#5d6d7e"
-        FONT_S = ("Microsoft JhengHei", 9)
+        FONT_S = ("Microsoft JhengHei UI", 9)
 
         # ── Trello 憑證 ───────────────────────────────────
         cred_frame = tk.LabelFrame(parent, text="Trello 憑證", bg=BG, font=FONTB)
@@ -978,7 +983,74 @@ class App(tk.Tk):
         bb.pack(fill="x", padx=12)
         tk.Button(bb, text="🔄  同步 Trello → Google Sheets", command=_sync,
                   bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei", 12, "bold"), pady=8).pack(fill="x")
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
+
+    # ════════════════════════════════════════════════════════
+    #  Tab 8：生產群組紀錄
+    # ════════════════════════════════════════════════════════
+    def _build_tab_production(self, parent, FONT, FONTB, BG):
+        GRAY   = "#5d6d7e"
+        FONT_S = ("Microsoft JhengHei UI", 9)
+
+        # ── 說明 ──────────────────────────────────────────
+        info = tk.LabelFrame(parent, text="說明", bg=BG, font=FONTB)
+        info.pack(fill="x", padx=12, pady=(12, 4))
+        tk.Label(info,
+                 text="從 Trello「本周下單」抓取 2026/5/15 之後的新卡片，附加到生產群組紀錄 Excel。\n"
+                      "Trello 憑證與「出貨一覽表」頁籤共用，請先在該頁籤儲存憑證。",
+                 bg=BG, font=FONT_S, fg=GRAY, justify="left",
+                 ).pack(padx=12, pady=8, anchor="w")
+
+        # ── 檔案路徑 ──────────────────────────────────────
+        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf.pack(fill="x", padx=12, pady=4)
+        tk.Label(pf, text="寫入檔案：", bg="#e8ecf0", font=FONT, fg=GRAY,
+                 anchor="w", width=10).pack(side="left", padx=8, pady=6)
+        tk.Label(pf,
+                 text=r"Z:\會計\●使用表格\公司帳務\1.帳務資料\▲生產群組紀錄(新版)\生產群組紀錄2026(115年).xlsx",
+                 bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left", pady=6)
+
+        # ── 狀態與同步按鈕 ────────────────────────────────
+        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
+                             anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(8, 0))
+
+        def _sync():
+            tr_cfg  = self._config.get("trello", {})
+            api_key = tr_cfg.get("api_key", "").strip()
+            token   = tr_cfg.get("token",   "").strip()
+            if not api_key or not token:
+                messagebox.showwarning(
+                    "憑證未設定",
+                    "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證",
+                    parent=parent)
+                return
+
+            out_label.config(text="抓取 Trello 卡片中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                cards = fetch_po_cards(api_key, token)
+                out_label.config(text=f"找到 {len(cards)} 張卡片，寫入 Excel 中…", fg=GRAY)
+                parent.update_idletasks()
+
+                added = sync_production(cards, _PRODUCTION_SYNCED_PATH)
+                if added:
+                    out_label.config(text=f"✔  同步完成，新增 {added} 筆資料", fg="#1e8449")
+                else:
+                    out_label.config(text="✔  同步完成，無新卡片（2026/5/15 之後）", fg="#1e8449")
+                if messagebox.askyesno("同步完成",
+                        f"{'新增 ' + str(added) + ' 筆資料' if added else '無新卡片'}\n\n是否立即開啟生產群組紀錄？",
+                        parent=parent):
+                    os.startfile(str(_PRODUCTION_EXCEL))
+            except Exception as e:
+                out_label.config(text=f"✘  {e}", fg="#c0392b")
+                messagebox.showerror("同步失敗", str(e), parent=parent)
+
+        bb = tk.Frame(parent, bg=BG, pady=8)
+        bb.pack(fill="x", padx=12)
+        tk.Button(bb, text="🔄  同步 Trello → 生產群組紀錄.xlsx", command=_sync,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
 
     # ════════════════════════════════════════════════════════
     #  開檔
@@ -1031,7 +1103,7 @@ class App(tk.Tk):
         pop.grab_set()
 
         var   = tk.StringVar(value=old_val)
-        entry = tk.Entry(pop, textvariable=var, font=("Microsoft JhengHei", 11))
+        entry = tk.Entry(pop, textvariable=var, font=("Microsoft JhengHei UI", 11))
         entry.pack(fill="x", padx=10, pady=8)
         entry.select_range(0, "end")
         entry.focus()
@@ -1083,7 +1155,7 @@ class App(tk.Tk):
         pop.geometry("260x80")
         pop.grab_set()
         var   = tk.StringVar()
-        entry = tk.Entry(pop, textvariable=var, font=("Microsoft JhengHei", 11))
+        entry = tk.Entry(pop, textvariable=var, font=("Microsoft JhengHei UI", 11))
         entry.pack(fill="x", padx=10, pady=8)
         entry.focus()
 

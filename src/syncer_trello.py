@@ -2,7 +2,7 @@
 syncer_trello.py — 從 Trello「本周下單(PO)」清單抓取卡片並解析欄位
 """
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date as date_type
 
 import requests
 
@@ -68,13 +68,13 @@ def _parse_desc(desc: str) -> dict:
     }
 
 
-def _parse_bracket_date(title: str) -> str:
-    """從標題 【YYY.MM.DD ...】 解析民國日期，回傳 'M/D'；找不到則回傳空字串。"""
+def _parse_bracket_date(title: str) -> tuple[str, date_type | None]:
+    """從標題 【YYY.MM.DD ...】 解析民國日期，回傳 ('M/D', date) 或 ('', None)。"""
     m = re.search(r'【(\d{2,3})\.(\d{1,2})\.(\d{1,2})', title)
     if m:
-        month, day = int(m.group(2)), int(m.group(3))
-        return f"{month}/{day}"
-    return ""
+        roc, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return f"{month}/{day}", date_type(roc + 1911, month, day)
+    return "", None
 
 
 def _parse_title(title: str) -> dict:
@@ -136,11 +136,12 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
         fields = _parse_title(card["name"])
         desc_data = _parse_desc(card.get("desc", ""))
 
-        created_date = _parse_bracket_date(card["name"])
+        created_date, created_dt = _parse_bracket_date(card["name"])
         if not created_date:
             ts = int(card["id"][:8], 16)
             dt = datetime.fromtimestamp(ts, tz=timezone.utc)
             created_date = f"{dt.month}/{dt.day}"
+            created_dt = dt.date()
 
         label_names = [lb.get("name", "") for lb in (card.get("labels") or [])]
         has_remodel = "Y" if any("改造" in n for n in label_names) else "N"
@@ -153,6 +154,7 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
             "product":      fields["product"],
             "quantity":     fields["quantity"],
             "created_date": created_date,
+            "created_dt":   created_dt,
             "due_date":     card.get("due") or "",
             "card_url":     card.get("shortUrl", ""),
             "payment_raw":  desc_data["payment_raw"],
