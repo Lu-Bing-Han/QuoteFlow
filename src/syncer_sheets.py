@@ -53,21 +53,22 @@ def _save_synced_ids(synced_path: Path, ids: set):
 
 def _card_to_row(card: dict) -> list:
     """對應 Sheet 欄位順序：%, Y, 付託Y/N, 下單日期, 預計出貨, 客戶名稱, 性質, OB, 品號, 數量, 改造Y/N, 改造項目, 付款方式, 貨款金額"""
+    product_safe = card["product"].replace('"', "")
     return [
-        card["prefix"],      # %
-        "",                  # Y（待確認）
-        "",                  # 付託Y/N（待確認）
-        card["created_date"],# 下單日期
-        "",                  # 預計出貨月份/日期（待確認）
-        card["company"],     # 客戶名稱
-        "",                  # 性質（待確認）
-        "",                  # OB（待確認）
-        card["product"],     # 品號
-        card["quantity"],    # 數量
-        "",                  # 改造Y/N（待確認）
-        "",                  # 改造項目（待確認）
-        "",                  # 付款方式（待確認）
-        "",                  # 貨款金額(含稅)（待確認）
+        card["prefix"],                                                              # %
+        "Y",                                                                         # Y
+        card.get("payment_raw", ""),                                                 # 付託Y/N
+        card["created_date"],                                                        # 下單日期
+        card.get("delivery", ""),                                                    # 預計出貨
+        card["company"],                                                             # 客戶名稱
+        "BUYER",                                                                     # 性質
+        "N",                                                                         # OB
+        f'=HYPERLINK("{card.get("card_url","")}", "{product_safe}")',                # 品號
+        card["quantity"],                                                            # 數量
+        card.get("has_remodel", ""),                                                 # 改造Y/N
+        "",                                                                          # 改造項目
+        card.get("payment_type", ""),                                                # 付款方式
+        card.get("amount", ""),                                                      # 貨款金額(含稅)
     ]
 
 

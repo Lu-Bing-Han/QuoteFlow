@@ -1,3 +1,9 @@
+# 憑證與敏感設定
+config.json
+gsheets_token.json
+synced_cards.json
+template/credentials.json
+
 # 虛擬環境
 .venv/
 

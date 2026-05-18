@@ -41,6 +41,42 @@ def _get_list_id(api_key: str, token: str, board_id: str) -> str:
     raise ValueError(f"找不到清單「{_LIST_NAME}」")
 
 
+def _parse_desc(desc: str) -> dict:
+    """從卡片描述萃取付款方式、交期、應收總金額。"""
+    def _find(pattern):
+        m = re.search(pattern, desc or "", re.MULTILINE)
+        return m.group(1).strip() if m else ""
+
+    payment_raw = _find(r'付款方式[：:]\s*(.+)')
+    delivery    = _find(r'交期[：:]\s*(.+)')
+    amount      = _find(r'應收總金額[：:]\s*(.+)')
+
+    if "現金" in payment_raw:
+        payment_type = "現金"
+    elif "匯款" in payment_raw:
+        payment_type = "匯款"
+    elif "支票" in payment_raw:
+        payment_type = "支票"
+    else:
+        payment_type = ""
+
+    return {
+        "payment_raw":  payment_raw,
+        "payment_type": payment_type,
+        "delivery":     delivery,
+        "amount":       amount,
+    }
+
+
+def _parse_bracket_date(title: str) -> str:
+    """從標題 【YYY.MM.DD ...】 解析民國日期，回傳 'M/D'；找不到則回傳空字串。"""
+    m = re.search(r'【(\d{2,3})\.(\d{1,2})\.(\d{1,2})', title)
+    if m:
+        month, day = int(m.group(2)), int(m.group(3))
+        return f"{month}/{day}"
+    return ""
+
+
 def _parse_title(title: str) -> dict:
     """從卡片標題萃取各欄位。"""
     # 移除 【...】 標記
@@ -90,7 +126,7 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
 
     resp = requests.get(
         f"{_API_BASE}/lists/{list_id}/cards",
-        params={**_auth(api_key, token), "fields": "id,name,due"},
+        params={**_auth(api_key, token), "fields": "id,name,due,shortUrl,desc,labels"},
         timeout=15,
     )
     resp.raise_for_status()
@@ -98,10 +134,16 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
     result = []
     for card in resp.json():
         fields = _parse_title(card["name"])
-        # 建立日期從 card ID 前 8 位推算
-        ts  = int(card["id"][:8], 16)
-        dt  = datetime.fromtimestamp(ts, tz=timezone.utc)
-        created_date = f"{dt.month}/{dt.day}"
+        desc_data = _parse_desc(card.get("desc", ""))
+
+        created_date = _parse_bracket_date(card["name"])
+        if not created_date:
+            ts = int(card["id"][:8], 16)
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+            created_date = f"{dt.month}/{dt.day}"
+
+        label_names = [lb.get("name", "") for lb in (card.get("labels") or [])]
+        has_remodel = "Y" if any("改造" in n for n in label_names) else "N"
 
         result.append({
             "card_id":      card["id"],
@@ -112,5 +154,11 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
             "quantity":     fields["quantity"],
             "created_date": created_date,
             "due_date":     card.get("due") or "",
+            "card_url":     card.get("shortUrl", ""),
+            "payment_raw":  desc_data["payment_raw"],
+            "payment_type": desc_data["payment_type"],
+            "delivery":     desc_data["delivery"],
+            "amount":       desc_data["amount"],
+            "has_remodel":  has_remodel,
         })
     return result
