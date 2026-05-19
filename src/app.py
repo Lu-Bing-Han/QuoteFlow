@@ -18,6 +18,7 @@ from generator_schedule import generate_schedule, fetch_events, events_to_rows, 
 from syncer_trello import fetch_po_cards
 from syncer_sheets import sync_cards
 from syncer_production import sync_production, PRODUCTION_FILE as _PRODUCTION_EXCEL
+from creator_trello import read_excel_cards, create_cards as trello_create_cards
 
 from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
 
@@ -107,6 +108,7 @@ class App(tk.Tk):
         tab_sched    = tk.Frame(nb, bg=BG)
         tab_overview = tk.Frame(nb, bg=BG)
         tab_prod     = tk.Frame(nb, bg=BG)
+        tab_create   = tk.Frame(nb, bg=BG)
 
         nb.add(tab_ship,     text="  出貨單  ")
         nb.add(tab_insp,     text="  驗機單  ")
@@ -116,6 +118,7 @@ class App(tk.Tk):
         nb.add(tab_sched,    text="  出貨排程  ")
         nb.add(tab_overview, text="  出貨一覽表  ")
         nb.add(tab_prod,     text="  生產群組紀錄  ")
+        nb.add(tab_create,   text="  建立卡片  ")
 
         self._build_tab_shipping(tab_ship,    PAD, FONT, FONTB, BG)
         self._build_tab_inspection(tab_insp,  PAD, FONT, FONTB, BG)
@@ -125,6 +128,7 @@ class App(tk.Tk):
         self._build_tab_schedule(tab_sched,   FONT, FONTB, BG)
         self._build_tab_overview(tab_overview, FONT, FONTB, BG)
         self._build_tab_production(tab_prod,  FONT, FONTB, BG)
+        self._build_tab_create_cards(tab_create, FONT, FONTB, BG)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -1049,6 +1053,134 @@ class App(tk.Tk):
         bb = tk.Frame(parent, bg=BG, pady=8)
         bb.pack(fill="x", padx=12)
         tk.Button(bb, text="🔄  同步 Trello → 生產群組紀錄.xlsx", command=_sync,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
+
+    # ════════════════════════════════════════════════════════
+    #  Tab 9：建立卡片
+    # ════════════════════════════════════════════════════════
+    def _build_tab_create_cards(self, parent, FONT, FONTB, BG):
+        from tksheet import Sheet
+        GRAY   = "#5d6d7e"
+        FONT_S = ("Microsoft JhengHei UI", 9)
+
+        _HEADERS = ["標題", "公司資訊", "需求"]
+        _EMPTY   = ["", "", ""]
+
+        # ── 來源 Excel ────────────────────────────────────
+        src_frame = tk.LabelFrame(parent, text="來源 Excel", bg=BG, font=FONTB)
+        src_frame.pack(fill="x", padx=12, pady=(12, 4))
+        src_frame.columnconfigure(1, weight=1)
+
+        tk.Label(src_frame, text="檔案路徑：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=6)
+        path_var = tk.StringVar()
+        tk.Entry(src_frame, textvariable=path_var, font=FONT_S
+                 ).grid(row=0, column=1, sticky="ew", padx=4, pady=6)
+
+        def _pick_file():
+            p = filedialog.askopenfilename(
+                title="選擇 Excel 檔案",
+                filetypes=[("Excel 檔案", "*.xlsx *.xls"), ("所有檔案", "*.*")])
+            if p:
+                path_var.set(p)
+
+        tk.Button(src_frame, text="選擇", command=_pick_file,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT_S, padx=6).grid(row=0, column=2, padx=(0, 4), pady=6)
+
+        status_lbl = tk.Label(src_frame, text="", bg=BG, font=FONT_S, fg=GRAY)
+        status_lbl.grid(row=1, column=1, sticky="w", padx=4, pady=(0, 4))
+
+        # ── 可編輯 Sheet 預覽 ─────────────────────────────
+        prev_frame = tk.LabelFrame(parent, text="卡片預覽（雙擊儲存格可編輯，0 筆）",
+                                   bg=BG, font=FONT)
+        prev_frame.pack(fill="both", expand=True, padx=12, pady=4)
+
+        sheet = Sheet(prev_frame,
+                      headers=_HEADERS,
+                      data=[_EMPTY[:] for _ in range(10)],
+                      column_width=260,
+                      row_height=28)
+        sheet.enable_bindings()
+        sheet.pack(fill="both", expand=True)
+
+        def _load_preview():
+            p = path_var.get().strip()
+            if not p:
+                messagebox.showwarning("未選擇檔案", "請先選擇 Excel 檔案", parent=parent)
+                return
+            status_lbl.config(text="讀取中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                data = read_excel_cards(Path(p))
+                rows = [[c["title"], c["desc"].split("\n\n需求：\n")[0], c["needs"]]
+                        for c in data]
+                # 多留 5 列空白供手動新增
+                while len(rows) < len(data) + 5:
+                    rows.append(_EMPTY[:])
+                sheet.data = rows
+                prev_frame.config(
+                    text=f"卡片預覽（雙擊儲存格可編輯，{len(data)} 筆）")
+                status_lbl.config(text=f"✔  讀取完成，共 {len(data)} 筆", fg="#1e8449")
+            except Exception as e:
+                status_lbl.config(text=f"✘  {e}", fg="#c0392b")
+
+        tk.Button(src_frame, text="讀取預覽", command=_load_preview,
+                  bg="#117a65", fg="white", relief="flat",
+                  font=FONT_S, padx=6).grid(row=0, column=3, padx=(0, 8), pady=6)
+
+        # ── 建立按鈕 ──────────────────────────────────────
+        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
+                             anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(4, 0))
+
+        def _create():
+            rows = sheet.data
+            cards = []
+            for row in rows:
+                title = str(row[0]).strip() if len(row) > 0 else ""
+                info  = str(row[1]).strip() if len(row) > 1 else ""
+                needs = str(row[2]).strip() if len(row) > 2 else ""
+                if not title:
+                    continue
+                desc_parts = []
+                if info:
+                    desc_parts.append(info)
+                if needs:
+                    desc_parts.append(f"需求：\n{needs}")
+                cards.append({"title": title, "desc": "\n\n".join(desc_parts)})
+
+            if not cards:
+                messagebox.showwarning("無資料", "表格中沒有填入標題的列", parent=parent)
+                return
+            tr_cfg  = self._config.get("trello", {})
+            api_key = tr_cfg.get("api_key", "").strip()
+            token   = tr_cfg.get("token",   "").strip()
+            if not api_key or not token:
+                messagebox.showwarning(
+                    "憑證未設定",
+                    "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證",
+                    parent=parent)
+                return
+            if not messagebox.askyesno(
+                    "確認建立",
+                    f"即將在「0.待評估」清單建立 {len(cards)} 張卡片，確定繼續？",
+                    parent=parent):
+                return
+
+            out_label.config(text="建立中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                created = trello_create_cards(cards, api_key, token)
+                out_label.config(text=f"✔  成功建立 {created} 張卡片", fg="#1e8449")
+            except Exception as e:
+                out_label.config(text=f"✘  {e}", fg="#c0392b")
+                messagebox.showerror("建立失敗", str(e), parent=parent)
+
+        bb = tk.Frame(parent, bg=BG, pady=8)
+        bb.pack(fill="x", padx=12)
+        tk.Button(bb, text="🃏  建立全部卡片 → Trello 0.待評估", command=_create,
                   bg="#1a5276", fg="white", relief="flat",
                   font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
 
