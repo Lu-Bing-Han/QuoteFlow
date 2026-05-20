@@ -85,6 +85,7 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
         if not title:
             continue
 
+        a_val = str(row[0].value or "").strip()   # A欄 — 序號
         c_val = str(row[2].value or "").strip()   # 公司名
         d_val = str(row[3].value or "").strip()   # 聯絡人
         f_val = row[5].value                       # 電話/手機
@@ -104,7 +105,7 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
             f"地址："
         )
 
-        cards.append({"row": row_idx, "title": title, "desc": desc})
+        cards.append({"row": row_idx, "seq": a_val, "title": title, "desc": desc})
 
     wb.close()
     return cards

@@ -1089,8 +1089,8 @@ class App(tk.Tk):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
-        _HEADERS = ["標題", "描述"]
-        _EMPTY   = ["", ""]
+        _HEADERS = ["序號", "標題", "描述"]
+        _EMPTY   = ["", "", ""]
 
         # ── 頂部：來源 Excel（左）+ 使用說明（右）──────────
         top_row = tk.Frame(parent, bg=BG)
@@ -1146,6 +1146,17 @@ class App(tk.Tk):
         status_lbl = tk.Label(src_frame, text="", bg=BG, font=FONT_S, fg=GRAY)
         status_lbl.grid(row=2, column=1, sticky="w", padx=4, pady=(0, 4))
 
+        # ── 序號篩選列 ────────────────────────────────────
+        filter_frame = tk.Frame(parent, bg=BG)
+        filter_frame.pack(fill="x", padx=12, pady=(0, 2))
+        tk.Label(filter_frame, text="序號篩選：", bg=BG, font=FONT_S, fg=GRAY
+                 ).pack(side="left")
+        filter_var = tk.StringVar()
+        tk.Entry(filter_frame, textvariable=filter_var, font=FONT_S, width=30
+                 ).pack(side="left", padx=(4, 6))
+        tk.Label(filter_frame, text="（逗號分隔，例如 1,3,5；空白=全部顯示）",
+                 bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+
         # ── 可編輯 Sheet 預覽 ─────────────────────────────
         prev_frame = tk.LabelFrame(parent, text="卡片預覽（雙擊儲存格可編輯，0 筆）",
                                    bg=BG, font=FONT)
@@ -1154,10 +1165,33 @@ class App(tk.Tk):
         sheet = Sheet(prev_frame,
                       headers=_HEADERS,
                       data=[_EMPTY[:] for _ in range(10)],
-                      column_width=400,
+                      column_width=200,
                       row_height=28)
+        sheet.set_column_widths([70, 300, 500])
         sheet.enable_bindings()
         sheet.pack(fill="both", expand=True)
+
+        _all_data: list[dict] = []
+
+        def _apply_filter():
+            raw = filter_var.get().strip()
+            if raw:
+                keys = {s.strip() for s in raw.split(",") if s.strip()}
+                filtered = [c for c in _all_data if str(c["seq"]) in keys]
+            else:
+                filtered = _all_data
+            rows = [[c["seq"], c["title"], c["desc"]] for c in filtered]
+            while len(rows) < len(filtered) + 5:
+                rows.append(_EMPTY[:])
+            sheet.data = rows
+            prev_frame.config(text=f"卡片預覽（雙擊儲存格可編輯，{len(filtered)} 筆）")
+
+        tk.Button(filter_frame, text="篩選", command=_apply_filter,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT_S, padx=6).pack(side="left")
+        tk.Button(filter_frame, text="清除", command=lambda: (filter_var.set(""), _apply_filter()),
+                  bg="#5d6d7e", fg="white", relief="flat",
+                  font=FONT_S, padx=6).pack(side="left", padx=(4, 0))
 
         def _load_preview():
             p = path_var.get().strip()
@@ -1168,14 +1202,11 @@ class App(tk.Tk):
             parent.update_idletasks()
             try:
                 selected_sheet = sheet_var.get() or None
-                data = read_excel_cards(Path(p), sheet_name=selected_sheet)
-                rows = [[c["title"], c["desc"]] for c in data]
-                while len(rows) < len(data) + 5:
-                    rows.append(_EMPTY[:])
-                sheet.data = rows
-                prev_frame.config(
-                    text=f"卡片預覽（雙擊儲存格可編輯，{len(data)} 筆）")
-                status_lbl.config(text=f"✔  讀取完成，共 {len(data)} 筆", fg="#1e8449")
+                _all_data.clear()
+                _all_data.extend(read_excel_cards(Path(p), sheet_name=selected_sheet))
+                filter_var.set("")
+                _apply_filter()
+                status_lbl.config(text=f"✔  讀取完成，共 {len(_all_data)} 筆", fg="#1e8449")
             except Exception as e:
                 status_lbl.config(text=f"✘  {e}", fg="#c0392b")
 
@@ -1192,8 +1223,8 @@ class App(tk.Tk):
             rows = sheet.data
             cards = []
             for row in rows:
-                title = str(row[0]).strip() if len(row) > 0 else ""
-                desc  = str(row[1]).strip() if len(row) > 1 else ""
+                title = str(row[1]).strip() if len(row) > 1 else ""
+                desc  = str(row[2]).strip() if len(row) > 2 else ""
                 if not title:
                     continue
                 cards.append({"title": title, "desc": desc})
