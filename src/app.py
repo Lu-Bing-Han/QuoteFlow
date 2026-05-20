@@ -17,7 +17,7 @@ from generator_label import generate_labels
 from generator_schedule import generate_schedule, fetch_events, events_to_rows, calculate_travel_times, sort_rows_by_location
 from syncer_trello import fetch_po_cards
 from syncer_sheets import sync_cards
-from syncer_production import sync_production, PRODUCTION_FILE as _PRODUCTION_EXCEL
+from syncer_production import sync_production
 from creator_trello import read_excel_cards, create_cards as trello_create_cards, get_sheet_names
 
 from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
@@ -109,6 +109,7 @@ class App(tk.Tk):
         tab_overview = tk.Frame(nb, bg=BG)
         tab_prod     = tk.Frame(nb, bg=BG)
         tab_create   = tk.Frame(nb, bg=BG)
+        tab_paths    = tk.Frame(nb, bg=BG)
 
         nb.add(tab_ship,     text="  出貨單  ")
         nb.add(tab_insp,     text="  驗機單  ")
@@ -119,6 +120,7 @@ class App(tk.Tk):
         nb.add(tab_overview, text="  出貨一覽表  ")
         nb.add(tab_prod,     text="  生產群組紀錄  ")
         nb.add(tab_create,   text="  建立卡片  ")
+        nb.add(tab_paths,    text="  ⚙ 路徑設定  ")
 
         self._build_tab_shipping(tab_ship,    PAD, FONT, FONTB, BG)
         self._build_tab_inspection(tab_insp,  PAD, FONT, FONTB, BG)
@@ -129,6 +131,7 @@ class App(tk.Tk):
         self._build_tab_overview(tab_overview, FONT, FONTB, BG)
         self._build_tab_production(tab_prod,  FONT, FONTB, BG)
         self._build_tab_create_cards(tab_create, FONT, FONTB, BG)
+        self._build_tab_paths(tab_paths,      FONT, FONTB, BG)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -250,7 +253,7 @@ class App(tk.Tk):
         pf.pack(fill="x", padx=12, pady=4)
         tk.Label(pf, text="輸出路徑：", bg="#e8ecf0", font=FONT_S, fg=GRAY,
                  anchor="w", width=12).pack(side="left", padx=8, pady=6)
-        tk.Label(pf, text=r"Z:\Mika\驗收單及改造記錄單\Quoteflow_output",
+        tk.Label(pf, text="（依⚙路徑設定）",
                  bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left", pady=6)
 
         bb = tk.Frame(parent, bg=BG, pady=8)
@@ -275,7 +278,7 @@ class App(tk.Tk):
         row.pack(fill="x")
         tk.Label(row, text="輸出路徑：", bg="#e8ecf0", font=FONT_S,
                  fg=GRAY, anchor="w", width=10).pack(side="left", padx=8)
-        tk.Label(row, text=r"Z:\出貨單\Quoteflow_output",
+        tk.Label(row, text="（依⚙路徑設定）",
                  bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left")
 
         bb = tk.Frame(parent, bg=BG, pady=8)
@@ -532,7 +535,7 @@ class App(tk.Tk):
                 messagebox.showwarning("無資料", "請先填入標籤資料", parent=parent)
                 return
             date_tag = datetime.today().strftime("%Y%m%d%H%M%S")
-            out_path = Path(r"Z:\出貨單\Quoteflow_output") / f"標籤-{date_tag}.pdf"
+            out_path = self._get_path("output_label") / f"標籤-{date_tag}.pdf"
             try:
                 result = generate_labels(data_list, out_path, template_key=tpl)
                 if messagebox.askyesno("生成成功",
@@ -885,7 +888,8 @@ class App(tk.Tk):
             csrf = csrf_var.get().strip()
             target = date_entry.get_date()
             try:
-                out = generate_schedule(target, sid, csrf, rows=list(_rows))
+                out = generate_schedule(target, sid, csrf, rows=list(_rows),
+                                        schedule_file=self._get_path("schedule_file"))
                 out_label.config(text=f"✔  已寫入：{out}", fg="#1e8449")
                 if messagebox.askyesno("寫入成功",
                         f"排程已寫入：\n{out}\n\n是否立即開啟？", parent=parent):
@@ -1035,8 +1039,7 @@ class App(tk.Tk):
         pf.pack(fill="x", padx=12, pady=4)
         tk.Label(pf, text="寫入檔案：", bg="#e8ecf0", font=FONT, fg=GRAY,
                  anchor="w", width=10).pack(side="left", padx=8, pady=6)
-        tk.Label(pf,
-                 text=r"Z:\會計\●使用表格\公司帳務\1.帳務資料\▲生產群組紀錄(新版)\生產群組紀錄2026(115年).xlsx",
+        tk.Label(pf, text="（依⚙路徑設定）",
                  bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left", pady=6)
 
         # ── 狀態與同步按鈕 ────────────────────────────────
@@ -1062,7 +1065,8 @@ class App(tk.Tk):
                 out_label.config(text=f"找到 {len(cards)} 張卡片，寫入 Excel 中…", fg=GRAY)
                 parent.update_idletasks()
 
-                added = sync_production(cards, _PRODUCTION_SYNCED_PATH)
+                added = sync_production(cards, _PRODUCTION_SYNCED_PATH,
+                                        production_file=self._get_path("production_file"))
                 if added:
                     out_label.config(text=f"✔  同步完成，新增 {added} 筆資料", fg="#1e8449")
                 else:
@@ -1070,7 +1074,7 @@ class App(tk.Tk):
                 if messagebox.askyesno("同步完成",
                         f"{'新增 ' + str(added) + ' 筆資料' if added else '無新卡片'}\n\n是否立即開啟生產群組紀錄？",
                         parent=parent):
-                    os.startfile(str(_PRODUCTION_EXCEL))
+                    os.startfile(str(self._get_path("production_file")))
             except Exception as e:
                 out_label.config(text=f"✘  {e}", fg="#c0392b")
                 messagebox.showerror("同步失敗", str(e), parent=parent)
@@ -1265,6 +1269,71 @@ class App(tk.Tk):
     # ════════════════════════════════════════════════════════
     #  開檔
     # ════════════════════════════════════════════════════════
+    #  Tab 10：路徑設定
+    # ════════════════════════════════════════════════════════
+    def _build_tab_paths(self, parent, FONT, FONTB, BG):
+        GRAY   = "#5d6d7e"
+        FONT_S = ("Microsoft JhengHei UI", 9)
+        PAD    = {"padx": 8, "pady": 5}
+
+        items = [
+            ("output_shipping",   "出貨單 / 維修單 輸出資料夾", False),
+            ("output_inspection", "驗機單 輸出資料夾",          False),
+            ("output_tag",        "維修掛件 輸出資料夾",        False),
+            ("output_label",      "標籤 輸出資料夾",            False),
+            ("schedule_file",     "出貨行程表 .xlsx",           True),
+            ("production_file",   "生產群組紀錄 .xlsx",         True),
+        ]
+
+        lf = tk.LabelFrame(parent, text="輸出路徑設定", bg=BG, font=FONTB)
+        lf.pack(fill="x", padx=16, pady=(16, 8))
+        lf.columnconfigure(1, weight=1)
+
+        path_vars: dict[str, tk.StringVar] = {}
+        paths_cfg = self._config.get("paths", {})
+
+        for i, (key, label, is_file) in enumerate(items):
+            tk.Label(lf, text=label + "：", bg=BG, font=FONT_S, fg=GRAY,
+                     anchor="w").grid(row=i, column=0, sticky="w", **PAD)
+            var = tk.StringVar(value=paths_cfg.get(key) or self._PATH_DEFAULTS[key])
+            path_vars[key] = var
+            tk.Entry(lf, textvariable=var, font=FONT_S
+                     ).grid(row=i, column=1, sticky="ew", padx=(0, 4), pady=5)
+
+            def _pick(v=var, f=is_file):
+                if f:
+                    p = filedialog.askopenfilename(
+                        filetypes=[("Excel 檔案", "*.xlsx *.xls"), ("所有檔案", "*.*")])
+                else:
+                    p = filedialog.askdirectory()
+                if p:
+                    v.set(p)
+
+            tk.Button(lf, text="選擇", command=_pick,
+                      bg="#2e86c1", fg="white", relief="flat",
+                      font=FONT_S, padx=6).grid(row=i, column=2, padx=(0, 8), pady=5)
+
+        def _reset_defaults():
+            for key, var in path_vars.items():
+                var.set(self._PATH_DEFAULTS[key])
+
+        def _save():
+            self._config.setdefault("paths", {})
+            for key, var in path_vars.items():
+                self._config["paths"][key] = var.get().strip()
+            _save_config(self._config)
+            messagebox.showinfo("已儲存", "路徑設定已儲存", parent=parent)
+
+        bb = tk.Frame(parent, bg=BG)
+        bb.pack(fill="x", padx=16, pady=4)
+        tk.Button(bb, text="還原預設值", command=_reset_defaults,
+                  bg="#5d6d7e", fg="white", relief="flat",
+                  font=FONT, padx=10).pack(side="left", padx=(0, 8))
+        tk.Button(bb, text="儲存設定", command=_save,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei UI", 11, "bold"), padx=16, pady=6).pack(side="left")
+
+    # ════════════════════════════════════════════════════════
     def _open_file(self):
         path = filedialog.askopenfilename(
             title="選擇報價單",
@@ -1400,8 +1469,22 @@ class App(tk.Tk):
     # ════════════════════════════════════════════════════════
     #  生成
     # ════════════════════════════════════════════════════════
-    _OUT_SHIPPING = Path(r"Z:\出貨單\Quoteflow_output")
-    _OUT_TAG      = Path(r"Z:\待維修機台資料")
+    _PATH_DEFAULTS = {
+        "output_shipping":   r"Z:\出貨單\Quoteflow_output",
+        "output_inspection": r"Z:\Mika\驗收單及改造記錄單\Quoteflow_output",
+        "output_tag":        r"Z:\待維修機台資料",
+        "output_label":      r"Z:\出貨單\Quoteflow_output",
+        "schedule_file":     r"Z:\會計\5.出貨相關\出貨行程表.xlsx",
+        "production_file":   r"Z:\會計\●使用表格\公司帳務\1.帳務資料\▲生產群組紀錄(新版)\生產群組紀錄2026(115年).xlsx",
+    }
+
+    def _get_path(self, key: str) -> Path:
+        return Path(self._config.get("paths", {}).get(key) or self._PATH_DEFAULTS[key])
+
+    @property
+    def _OUT_SHIPPING(self):   return self._get_path("output_shipping")
+    @property
+    def _OUT_TAG(self):        return self._get_path("output_tag")
 
     def _sync_header(self):
         for key, var in self._read_vars.items():
@@ -1451,7 +1534,9 @@ class App(tk.Tk):
             messagebox.showwarning("尚未載入", "請先選擇並載入報價單")
             return
         try:
-            excel_path, word_paths = generate_inspection(self._src_path, self._parsed_data)
+            excel_path, word_paths = generate_inspection(
+                self._src_path, self._parsed_data,
+                output_dir=self._get_path("output_inspection"))
             msg = f"驗機單 Excel 已儲存至：\n{excel_path}"
             if word_paths:
                 msg += f"\n\n驗機單 Word（共 {len(word_paths)} 份）："

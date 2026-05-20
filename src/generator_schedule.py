@@ -212,8 +212,9 @@ def calculate_travel_times(rows: list, api_key: str, origin: str) -> tuple:
 
 
 def generate_schedule(target: date_type, session_id: str, csrf_token: str,
-                      rows: list | None = None) -> Path:
-    """Write a new sheet into _SCHEDULE_FILE for target date.
+                      rows: list | None = None,
+                      schedule_file: Path | None = None) -> Path:
+    """Write a new sheet into schedule_file (default: _SCHEDULE_FILE) for target date.
 
     rows: optional pre-processed list from events_to_rows (may be edited by user).
           If None, fetch from Timetree and derive automatically.
@@ -221,7 +222,8 @@ def generate_schedule(target: date_type, session_id: str, csrf_token: str,
     if rows is None:
         rows = events_to_rows(fetch_events(target, session_id, csrf_token))
 
-    wb = openpyxl.load_workbook(str(_SCHEDULE_FILE))
+    _file = schedule_file or _SCHEDULE_FILE
+    wb = openpyxl.load_workbook(str(_file))
 
     roc_year = target.year - 1911
     sheet_name = f"{roc_year}年{target.month}月{target.day}日"
@@ -300,6 +302,6 @@ def generate_schedule(target: date_type, session_id: str, csrf_token: str,
     )
     _merge_gh_border(footer_r + 2)
 
-    wb.save(str(_SCHEDULE_FILE))
+    wb.save(str(_file))
     wb.close()
-    return _SCHEDULE_FILE
+    return _file

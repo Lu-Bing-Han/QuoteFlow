@@ -342,14 +342,15 @@ def _generate_word_from_template(part_no: str, red_lines: list,
 
 # ── 主函式 ───────────────────────────────────────────────────────────
 
-def generate_inspection(src_path: str, data: dict):
+def generate_inspection(src_path: str, data: dict, output_dir: _Path | None = None):
     """
     回傳 (excel_path, [word_path, ...]) tuple。
     """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    _out = output_dir or OUTPUT_DIR
+    _out.mkdir(parents=True, exist_ok=True)
 
     customer = data["header"].get("customer", "客戶")
-    out_path = OUTPUT_DIR / f"驗機單-{customer}.xlsx"
+    out_path = _out / f"驗機單-{customer}.xlsx"
     shutil.copy(src_path, out_path)
 
     wb = load_workbook(out_path)
@@ -553,7 +554,7 @@ def generate_inspection(src_path: str, data: dict):
 
                 safe_part = re.sub(r'[\\/:*?"<>|]', '_', part_no) if part_no else f'item{seq}'
                 date_tag  = datetime.today().strftime("%Y%m%d")
-                word_out  = OUTPUT_DIR / f"{customer}{safe_part}改造紀錄單-{date_tag}.docx"
+                word_out  = _out / f"{customer}{safe_part}改造紀錄單-{date_tag}.docx"
                 _generate_word_from_template(part_no, red_lines, word_out,
                                              customer=customer)
                 word_paths.append(word_out)

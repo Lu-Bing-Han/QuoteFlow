@@ -65,7 +65,8 @@ def _save_synced_ids(synced_path: Path, ids: set):
     )
 
 
-def sync_production(cards: list[dict], synced_path: Path) -> int:
+def sync_production(cards: list[dict], synced_path: Path,
+                    production_file: Path | None = None) -> int:
     """將 2026/5/15 之後且尚未同步的卡片附加到生產群組紀錄 Excel。"""
     synced_ids = _read_synced_ids(synced_path)
 
@@ -80,7 +81,8 @@ def sync_production(cards: list[dict], synced_path: Path) -> int:
     # 按下單日期由早到晚排序
     new_cards.sort(key=lambda c: c.get("created_dt") or date.max)
 
-    wb = openpyxl.load_workbook(str(PRODUCTION_FILE))
+    _file = production_file or PRODUCTION_FILE
+    wb = openpyxl.load_workbook(str(_file))
     ws = wb.active
     for card in new_cards:
         ws.append(_card_to_row(card))
@@ -90,7 +92,7 @@ def sync_production(cards: list[dict], synced_path: Path) -> int:
         ws.cell(r, 2).alignment  = _CENTER  # B 下單日期
         ws.cell(r, 5).alignment  = _CENTER  # E 數量
         ws.cell(r, 11).alignment = _RIGHT   # K 綜額
-    wb.save(str(PRODUCTION_FILE))
+    wb.save(str(_file))
     wb.close()
 
     synced_ids.update(c["card_id"] for c in new_cards)
