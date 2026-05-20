@@ -32,14 +32,36 @@ def _extract_seq(title: str) -> float:
     return int(m.group(1)) if m else float('inf')
 
 
-def _extract_company(title: str) -> str:
-    """Return company name, stripping 【...】, (N), (拉回) leading prefixes."""
+def _split_prefixes(title: str) -> tuple[str, str]:
+    """Split off leading parenthesised groups from title (after stripping 【】).
+
+    Numeric groups like (1)(2) are skipped silently (used only for ordering).
+    Text groups like (拉回)(拉回+送回) are collected and returned as the first element.
+    Returns (text_prefix, remaining_title).
+    """
     t = re.sub(r'【[^】]*】', '', title).strip()
-    t = re.sub(r'^(\(\d+\)\s*)*(\(拉回\)\s*)?', '', t).strip()
-    m = re.match(r'^(.+?)(?=\()', t)
+    text_parts: list[str] = []
+    while True:
+        m = re.match(r'^\(\d+\)\s*', t)
+        if m:
+            t = t[m.end():]
+            continue
+        m = re.match(r'^(\([^)]+\))\s*', t)
+        if m:
+            text_parts.append(m.group(1))
+            t = t[m.end():]
+        else:
+            break
+    return "".join(text_parts), t
+
+
+def _extract_company(title: str) -> str:
+    """Return company name, stripping all leading (N)/(text) prefixes."""
+    _, rest = _split_prefixes(title)
+    m = re.match(r'^(.+?)(?=[\(（])', rest)  # match both half-width ( and full-width （
     if m:
         return m.group(1).strip(' -')
-    return t.split()[0] if t else title
+    return rest.split()[0] if rest else title
 
 
 def _location_cell(ev: dict) -> str:
@@ -47,17 +69,19 @@ def _location_cell(ev: dict) -> str:
     loc = (ev.get("location") or "").strip()
     if loc:
         return f"{company}({loc})"
-    m = re.search(r'\(([^)]+)\)', ev.get("title", ""))
+    _, rest = _split_prefixes(ev.get("title", ""))
+    m = re.search(r'[\(（]([^)）]+)[)）]', rest)  # half-width or full-width brackets
     area = m.group(1) if m else ""
     return f"{company}({area})" if area else company
 
 
 def _note_suffix(ev: dict) -> str:
-    """Return the suffix part of the note (text after 'N.company-')."""
+    """Return note suffix: text-prefix (e.g. (拉回)) prepended, then person/product info."""
     company = _extract_company(ev.get("title", ""))
-    t = re.sub(r'【[^】]*】', '', ev.get("title", "")).strip()
-    t = re.sub(r'^' + re.escape(company) + r'\s*(\([^)]*\))?\s*', '', t).strip()
-    return re.sub(r'^[-\s]+', '', t).strip()
+    text_prefix, rest = _split_prefixes(ev.get("title", ""))
+    rest = re.sub(r'^' + re.escape(company) + r'\s*(?:[\(（][^)）]*[)）])?\s*', '', rest).strip()
+    rest = re.sub(r'^[-\s]+', '', rest).strip()
+    return f"{text_prefix} {rest}".strip() if text_prefix else rest
 
 
 def _note_cell(seq: int, ev: dict) -> str:
@@ -114,6 +138,30 @@ def _maps_query(row: dict) -> str:
         return loc
     m = re.search(r'\(([^)]+)\)', row["location"])
     return m.group(1) if m else row["location"]
+
+
+def sort_rows_by_location(rows: list, api_key: str, south_to_north: bool = True) -> tuple[list, list]:
+    """Sort rows by latitude via Google Maps Geocoding API.
+
+    Returns (sorted_rows, failed_list). Failed rows are appended at the end unchanged.
+    """
+    _GEO_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+    geocoded: list[tuple[float, dict]] = []
+    failed: list[dict] = []
+
+    for row in rows:
+        query = _maps_query(row)
+        resp = requests.get(_GEO_URL, params={"address": query, "key": api_key}, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("status") == "OK" and data.get("results"):
+            lat = data["results"][0]["geometry"]["location"]["lat"]
+            geocoded.append((lat, row))
+        else:
+            failed.append(row)
+
+    geocoded.sort(key=lambda x: x[0], reverse=not south_to_north)
+    return [r for _, r in geocoded] + failed, failed
 
 
 def _format_duration(seconds: int) -> str:

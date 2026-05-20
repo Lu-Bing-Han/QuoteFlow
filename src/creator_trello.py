@@ -2,6 +2,7 @@
 creator_trello.py — 從 Excel 讀取資料並在 Trello 建立卡片
 """
 from pathlib import Path
+import re
 
 import openpyxl
 import requests
@@ -42,42 +43,68 @@ def _get_target_list_id(api_key: str, token: str) -> str:
     raise ValueError(f"找不到清單「{_LIST_NAME}」")
 
 
-def read_excel_cards(excel_path: Path) -> list[dict]:
-    """讀 Excel：C欄第一行為標題，其餘為描述；D欄需求附加在描述下方。
+def _parse_phones(cell_value) -> tuple[str, str]:
+    """從儲存格解析手機（10碼）與電話（9碼），回傳 (mobile, phone)。"""
+    if not cell_value:
+        return "", ""
+    mobile, phone = "", ""
+    for part in re.split(r'[\n\r/,、 ]+', str(cell_value).strip()):
+        part = part.strip()
+        if not part:
+            continue
+        digits = re.sub(r'[^0-9]', '', part)
+        if len(digits) == 10 and not mobile:
+            mobile = part
+        elif len(digits) == 9 and not phone:
+            phone = part
+    return mobile, phone
 
-    回傳 list of {"row": int, "title": str, "desc": str, "needs": str}
+
+def get_sheet_names(excel_path: Path) -> list[str]:
+    """回傳 Excel 中所有工作表名稱。"""
+    wb = openpyxl.load_workbook(str(excel_path), read_only=True, data_only=True)
+    names = wb.sheetnames
+    wb.close()
+    return names
+
+
+def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[dict]:
+    """讀 Excel：B欄=標題，C=公司名，D=聯絡人，F=電話/手機，G=信箱，H=統編。
+
+    回傳 list of {"row": int, "title": str, "desc": str}
     """
     wb = openpyxl.load_workbook(str(excel_path), data_only=True)
-    ws = wb.active
+    ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb.active
 
     cards = []
     for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
-        c_val = row[2].value  # C欄
-        if not c_val:
+        b_val = row[1].value  # B欄 — 標題
+        if not b_val:
             continue
-
-        lines = str(c_val).strip().splitlines()
-        title = lines[0].strip() if lines else ""
-        rest  = "\n".join(ln for ln in lines[1:] if ln.strip())
-
-        d_val  = row[3].value  # D欄（需求）
-        needs  = str(d_val).strip() if d_val else ""
-
+        title = str(b_val).strip()
         if not title:
             continue
 
-        desc_parts = []
-        if rest:
-            desc_parts.append(rest)
-        if needs:
-            desc_parts.append(f"需求：\n{needs}")
+        c_val = str(row[2].value or "").strip()   # 公司名
+        d_val = str(row[3].value or "").strip()   # 聯絡人
+        f_val = row[5].value                       # 電話/手機
+        g_val = str(row[6].value or "").strip()   # 電子信箱
+        h_val = str(row[7].value or "").strip()   # 統一編號
 
-        cards.append({
-            "row":   row_idx,
-            "title": title,
-            "desc":  "\n\n".join(desc_parts),
-            "needs": needs,
-        })
+        mobile, phone = _parse_phones(f_val)
+
+        desc = (
+            f"公司名：{c_val}\n"
+            f"聯絡人：{d_val}\n"
+            f"手機：{mobile}\n"
+            f"電話：{phone}\n"
+            f"傳真：\n"
+            f"電子信箱：{g_val}\n"
+            f"統一編號：{h_val}\n"
+            f"地址："
+        )
+
+        cards.append({"row": row_idx, "title": title, "desc": desc})
 
     wb.close()
     return cards
@@ -95,6 +122,7 @@ def create_cards(cards: list[dict], api_key: str, token: str) -> int:
                 "idList": list_id,
                 "name":   card["title"],
                 "desc":   card["desc"],
+                "pos":    "top",
             },
             timeout=15,
         )

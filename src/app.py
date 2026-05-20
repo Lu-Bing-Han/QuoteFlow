@@ -14,11 +14,11 @@ from generator_inspection import generate_inspection
 from generator_fix import generate_fix
 from generator_tag import generate_tag
 from generator_label import generate_labels
-from generator_schedule import generate_schedule, fetch_events, events_to_rows, calculate_travel_times
+from generator_schedule import generate_schedule, fetch_events, events_to_rows, calculate_travel_times, sort_rows_by_location
 from syncer_trello import fetch_po_cards
 from syncer_sheets import sync_cards
 from syncer_production import sync_production, PRODUCTION_FILE as _PRODUCTION_EXCEL
-from creator_trello import read_excel_cards, create_cards as trello_create_cards
+from creator_trello import read_excel_cards, create_cards as trello_create_cards, get_sheet_names
 
 from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
 
@@ -813,13 +813,38 @@ class App(tk.Tk):
             except Exception as e:
                 fetch_status.config(text=f"✘ {e}", fg="#c0392b")
 
+        def _sort_location(south_to_north: bool):
+            if not _rows:
+                messagebox.showwarning("無資料", "請先抓取事件清單", parent=parent)
+                return
+            api_key = gm_key_var.get().strip()
+            if not api_key:
+                messagebox.showwarning("未設定", "請先填入 Google Maps API Key", parent=parent)
+                return
+            fetch_status.config(text="Geocoding 中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                sorted_rows, failed = sort_rows_by_location(_rows, api_key, south_to_north)
+                _rows.clear()
+                _rows.extend(sorted_rows)
+                _refresh_tree()
+                if failed:
+                    names = ", ".join(r["location"].split("(")[0] for r in failed)
+                    fetch_status.config(text=f"排序完成，{len(failed)} 筆無法定位：{names}", fg="#e67e22")
+                else:
+                    fetch_status.config(text="排序完成", fg="#1e8449")
+            except Exception as e:
+                fetch_status.config(text=f"✘ {e}", fg="#c0392b")
+
         for text, cmd, color in [
-            ("↑ 上移",    lambda: _move(-1),  "#5d6d7e"),
-            ("↓ 下移",    lambda: _move(1),   "#5d6d7e"),
-            ("➕ 新增",   _add_row,            "#117a65"),
-            ("✏ 編輯",    _edit_row,           "#1a5276"),
-            ("🗑 刪除",   _delete_row,         "#922b21"),
-            ("📍 計算時間", _calc_travel,      "#6c3483"),
+            ("↑ 上移",       lambda: _move(-1),               "#5d6d7e"),
+            ("↓ 下移",       lambda: _move(1),                "#5d6d7e"),
+            ("➕ 新增",      _add_row,                         "#117a65"),
+            ("✏ 編輯",       _edit_row,                        "#1a5276"),
+            ("🗑 刪除",      _delete_row,                      "#922b21"),
+            ("🧭 南→北",    lambda: _sort_location(True),     "#1a5276"),
+            ("🧭 北→南",    lambda: _sort_location(False),    "#1a5276"),
+            ("📍 計算時間",  _calc_travel,                     "#6c3483"),
         ]:
             tk.Button(btn_row, text=text, command=cmd,
                       bg=color, fg="white", relief="flat",
@@ -1064,13 +1089,26 @@ class App(tk.Tk):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
-        _HEADERS = ["標題", "公司資訊", "需求"]
-        _EMPTY   = ["", "", ""]
+        _HEADERS = ["標題", "描述"]
+        _EMPTY   = ["", ""]
 
-        # ── 來源 Excel ────────────────────────────────────
-        src_frame = tk.LabelFrame(parent, text="來源 Excel", bg=BG, font=FONTB)
-        src_frame.pack(fill="x", padx=12, pady=(12, 4))
+        # ── 頂部：來源 Excel（左）+ 使用說明（右）──────────
+        top_row = tk.Frame(parent, bg=BG)
+        top_row.pack(fill="x", padx=12, pady=(12, 4))
+
+        src_frame = tk.LabelFrame(top_row, text="來源 Excel", bg=BG, font=FONTB)
+        src_frame.pack(side="left", fill="y", padx=(0, 8))
         src_frame.columnconfigure(1, weight=1)
+
+        hint_frame = tk.LabelFrame(top_row, text="使用說明", bg=BG, font=FONTB)
+        hint_frame.pack(side="left", fill="both", expand=True)
+        hint_text = (
+            "導入 Excel 後即可編輯資料\n"
+            "可以選取多筆資料搬移刪除\n"
+            "不可跳號選取"
+        )
+        tk.Label(hint_frame, text=hint_text, bg=BG, font=FONT_S, fg=GRAY,
+                 justify="left", anchor="nw").pack(padx=10, pady=8, anchor="nw")
 
         tk.Label(src_frame, text="檔案路徑：", bg=BG, font=FONT_S, fg=GRAY,
                  anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=6)
@@ -1078,19 +1116,35 @@ class App(tk.Tk):
         tk.Entry(src_frame, textvariable=path_var, font=FONT_S
                  ).grid(row=0, column=1, sticky="ew", padx=4, pady=6)
 
+        tk.Label(src_frame, text="工作表：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=4)
+        sheet_var = tk.StringVar()
+        sheet_cb  = ttk.Combobox(src_frame, textvariable=sheet_var, font=FONT_S,
+                                  state="readonly", width=20)
+        sheet_cb.grid(row=1, column=1, sticky="w", padx=4, pady=4)
+
         def _pick_file():
             p = filedialog.askopenfilename(
                 title="選擇 Excel 檔案",
                 filetypes=[("Excel 檔案", "*.xlsx *.xls"), ("所有檔案", "*.*")])
-            if p:
-                path_var.set(p)
+            if not p:
+                return
+            path_var.set(p)
+            try:
+                names = get_sheet_names(Path(p))
+                sheet_cb["values"] = names
+                if names:
+                    sheet_var.set(names[0])
+            except Exception:
+                sheet_cb["values"] = []
+                sheet_var.set("")
 
         tk.Button(src_frame, text="選擇", command=_pick_file,
                   bg="#2e86c1", fg="white", relief="flat",
                   font=FONT_S, padx=6).grid(row=0, column=2, padx=(0, 4), pady=6)
 
         status_lbl = tk.Label(src_frame, text="", bg=BG, font=FONT_S, fg=GRAY)
-        status_lbl.grid(row=1, column=1, sticky="w", padx=4, pady=(0, 4))
+        status_lbl.grid(row=2, column=1, sticky="w", padx=4, pady=(0, 4))
 
         # ── 可編輯 Sheet 預覽 ─────────────────────────────
         prev_frame = tk.LabelFrame(parent, text="卡片預覽（雙擊儲存格可編輯，0 筆）",
@@ -1100,7 +1154,7 @@ class App(tk.Tk):
         sheet = Sheet(prev_frame,
                       headers=_HEADERS,
                       data=[_EMPTY[:] for _ in range(10)],
-                      column_width=260,
+                      column_width=400,
                       row_height=28)
         sheet.enable_bindings()
         sheet.pack(fill="both", expand=True)
@@ -1113,10 +1167,9 @@ class App(tk.Tk):
             status_lbl.config(text="讀取中…", fg=GRAY)
             parent.update_idletasks()
             try:
-                data = read_excel_cards(Path(p))
-                rows = [[c["title"], c["desc"].split("\n\n需求：\n")[0], c["needs"]]
-                        for c in data]
-                # 多留 5 列空白供手動新增
+                selected_sheet = sheet_var.get() or None
+                data = read_excel_cards(Path(p), sheet_name=selected_sheet)
+                rows = [[c["title"], c["desc"]] for c in data]
                 while len(rows) < len(data) + 5:
                     rows.append(_EMPTY[:])
                 sheet.data = rows
@@ -1140,16 +1193,10 @@ class App(tk.Tk):
             cards = []
             for row in rows:
                 title = str(row[0]).strip() if len(row) > 0 else ""
-                info  = str(row[1]).strip() if len(row) > 1 else ""
-                needs = str(row[2]).strip() if len(row) > 2 else ""
+                desc  = str(row[1]).strip() if len(row) > 1 else ""
                 if not title:
                     continue
-                desc_parts = []
-                if info:
-                    desc_parts.append(info)
-                if needs:
-                    desc_parts.append(f"需求：\n{needs}")
-                cards.append({"title": title, "desc": "\n\n".join(desc_parts)})
+                cards.append({"title": title, "desc": desc})
 
             if not cards:
                 messagebox.showwarning("無資料", "表格中沒有填入標題的列", parent=parent)
