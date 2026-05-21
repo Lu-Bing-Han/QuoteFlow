@@ -19,6 +19,7 @@ from syncer_trello import fetch_po_cards
 from syncer_sheets import sync_cards
 from syncer_production import sync_production
 from creator_trello import read_excel_cards, create_cards as trello_create_cards, get_sheet_names
+from downloader_trello import get_board_lists, get_list_cards, download_cards as trello_download_cards
 
 from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
 
@@ -86,7 +87,10 @@ class App(tk.Tk):
                  font=("Microsoft JhengHei UI", 14, "bold")).pack(side="left", padx=16)
         tk.Button(top, text="選擇報價單 .xlsx ▶", command=self._open_file,
                   bg="#2e86c1", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 10), padx=10, pady=3).pack(side="right", padx=16)
+                  font=("Microsoft JhengHei UI", 10), padx=10, pady=3).pack(side="right", padx=(4, 16))
+        tk.Button(top, text="⚙", command=self._open_paths_dialog,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei UI", 13), padx=6, pady=1).pack(side="right")
 
         self._file_label = tk.Label(self, text="⚠  尚未選擇報價單",
                                     bg=BG, fg="#c0392b", font=FONT)
@@ -109,7 +113,7 @@ class App(tk.Tk):
         tab_overview = tk.Frame(nb, bg=BG)
         tab_prod     = tk.Frame(nb, bg=BG)
         tab_create   = tk.Frame(nb, bg=BG)
-        tab_paths    = tk.Frame(nb, bg=BG)
+        tab_download = tk.Frame(nb, bg=BG)
 
         nb.add(tab_ship,     text="  出貨單  ")
         nb.add(tab_insp,     text="  驗機單  ")
@@ -120,7 +124,7 @@ class App(tk.Tk):
         nb.add(tab_overview, text="  出貨一覽表  ")
         nb.add(tab_prod,     text="  生產群組紀錄  ")
         nb.add(tab_create,   text="  建立卡片  ")
-        nb.add(tab_paths,    text="  ⚙ 路徑設定  ")
+        nb.add(tab_download, text="  下載卡片  ")
 
         self._build_tab_shipping(tab_ship,    PAD, FONT, FONTB, BG)
         self._build_tab_inspection(tab_insp,  PAD, FONT, FONTB, BG)
@@ -131,7 +135,7 @@ class App(tk.Tk):
         self._build_tab_overview(tab_overview, FONT, FONTB, BG)
         self._build_tab_production(tab_prod,  FONT, FONTB, BG)
         self._build_tab_create_cards(tab_create, FONT, FONTB, BG)
-        self._build_tab_paths(tab_paths,      FONT, FONTB, BG)
+        self._build_tab_download_cards(tab_download, FONT, FONTB, BG)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -1269,23 +1273,215 @@ class App(tk.Tk):
     # ════════════════════════════════════════════════════════
     #  開檔
     # ════════════════════════════════════════════════════════
-    #  Tab 10：路徑設定
+    #  Tab 10：下載卡片
     # ════════════════════════════════════════════════════════
-    def _build_tab_paths(self, parent, FONT, FONTB, BG):
+    def _build_tab_download_cards(self, parent, FONT, FONTB, BG):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei UI", 9)
+
+        _list_map: dict[str, str] = {}   # list name → list id
+        _all_cards: list[dict]    = []   # 目前預覽的卡片資料
+
+        # ── 清單選擇 ──────────────────────────────────────
+        top = tk.LabelFrame(parent, text="Trello 清單", bg=BG, font=FONTB)
+        top.pack(fill="x", padx=12, pady=(12, 4))
+        top.columnconfigure(1, weight=1)
+
+        tk.Label(top, text="選擇清單：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=6)
+
+        list_var = tk.StringVar()
+        list_cb  = ttk.Combobox(top, textvariable=list_var, font=FONT_S,
+                                 state="readonly", width=28)
+        list_cb.grid(row=0, column=1, sticky="w", padx=4, pady=6)
+
+        status_lbl = tk.Label(top, text="", bg=BG, font=FONT_S, fg=GRAY)
+        status_lbl.grid(row=0, column=3, sticky="w", padx=8, pady=6)
+
+        def _get_creds():
+            tr_cfg  = self._config.get("trello", {})
+            api_key = tr_cfg.get("api_key", "").strip()
+            token   = tr_cfg.get("token",   "").strip()
+            if not api_key or not token:
+                messagebox.showwarning("憑證未設定",
+                    "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證", parent=parent)
+                return None, None
+            return api_key, token
+
+        def _fetch_lists():
+            api_key, token = _get_creds()
+            if not api_key:
+                return
+            status_lbl.config(text="抓取中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                lists = get_board_lists(api_key, token)
+                _list_map.clear()
+                _list_map.update({lst["name"]: lst["id"] for lst in lists})
+                names = list(_list_map.keys())
+                list_cb["values"] = names
+                if names:
+                    list_var.set(names[0])
+                status_lbl.config(text=f"找到 {len(lists)} 個清單", fg="#1e8449")
+            except Exception as e:
+                status_lbl.config(text=f"✘ {e}", fg="#c0392b")
+
+        def _preview_cards():
+            selected = list_var.get().strip()
+            if not selected or selected not in _list_map:
+                messagebox.showwarning("未選擇清單", "請先抓取清單並選擇", parent=parent)
+                return
+            api_key, token = _get_creds()
+            if not api_key:
+                return
+            status_lbl.config(text="載入卡片中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                cards = get_list_cards(_list_map[selected], api_key, token)
+                _all_cards.clear()
+                _all_cards.extend(cards)
+                tree.delete(*tree.get_children())
+                for card in cards:
+                    labels = "、".join(
+                        lbl.get("name") or lbl.get("color", "")
+                        for lbl in card.get("labels", []))
+                    att_count = len(card.get("attachments") or [])
+                    tree.insert("", "end", values=(
+                        card["name"], labels, att_count))
+                tree.selection_set(tree.get_children())   # 預設全選
+                status_lbl.config(text=f"找到 {len(cards)} 張卡片", fg="#1e8449")
+                prev_frame.config(text=f"卡片預覽（共 {len(cards)} 張，可多選）")
+            except Exception as e:
+                status_lbl.config(text=f"✘ {e}", fg="#c0392b")
+
+        tk.Button(top, text="抓取清單", command=_fetch_lists,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT_S, padx=6).grid(row=0, column=2, padx=(0, 4), pady=6)
+        tk.Button(top, text="預覽卡片", command=_preview_cards,
+                  bg="#117a65", fg="white", relief="flat",
+                  font=FONT_S, padx=6).grid(row=0, column=3, padx=(0, 8), pady=6)
+        # 覆蓋 status_lbl 位置（改放 column=4）
+        status_lbl.grid(row=0, column=4, sticky="w", padx=4, pady=6)
+
+        # ── 卡片預覽 Treeview ─────────────────────────────
+        prev_frame = tk.LabelFrame(parent, text="卡片預覽（共 0 張，可多選）",
+                                   bg=BG, font=FONT)
+        prev_frame.pack(fill="both", expand=True, padx=12, pady=4)
+
+        cols = ("title", "labels", "att")
+        tree = ttk.Treeview(prev_frame, columns=cols, show="headings",
+                            selectmode="extended", height=8)
+        tree.heading("title",  text="標題")
+        tree.heading("labels", text="標籤")
+        tree.heading("att",    text="附件")
+        tree.column("title",  width=340, anchor="w",      stretch=True)
+        tree.column("labels", width=130, anchor="w",      stretch=False)
+        tree.column("att",    width=50,  anchor="center", stretch=False)
+
+        vsb = ttk.Scrollbar(prev_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+
+        # 全選 / 取消全選
+        sel_row = tk.Frame(parent, bg=BG)
+        sel_row.pack(fill="x", padx=12, pady=(2, 0))
+        tk.Button(sel_row, text="全選", command=lambda: tree.selection_set(tree.get_children()),
+                  bg="#5d6d7e", fg="white", relief="flat", font=FONT_S, padx=8
+                  ).pack(side="left", padx=(0, 4))
+        tk.Button(sel_row, text="取消全選", command=lambda: tree.selection_remove(tree.get_children()),
+                  bg="#5d6d7e", fg="white", relief="flat", font=FONT_S, padx=8
+                  ).pack(side="left")
+
+        # ── 輸出路徑 ──────────────────────────────────────
+        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf.pack(fill="x", padx=12, pady=4)
+        tk.Label(pf, text="輸出資料夾：", bg="#e8ecf0", font=FONT_S, fg=GRAY,
+                 anchor="w", width=12).pack(side="left", padx=8, pady=5)
+        tk.Label(pf, text="（依⚙路徑設定）",
+                 bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left", pady=5)
+
+        # ── 狀態與下載按鈕 ────────────────────────────────
+        out_label = tk.Label(parent, text="", bg=BG, font=FONT_S, fg=GRAY,
+                             anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(4, 0))
+
+        def _download():
+            sel_ids = tree.selection()
+            if not sel_ids:
+                messagebox.showwarning("未選擇", "請先預覽並選取要下載的卡片", parent=parent)
+                return
+            api_key, token = _get_creds()
+            if not api_key:
+                return
+
+            indices  = [tree.index(i) for i in sel_ids]
+            selected_cards = [_all_cards[i] for i in indices]
+            list_name  = list_var.get().strip()
+            output_dir = self._get_path("download_cards_dir") / list_name
+
+            out_label.config(text="下載中…", fg=GRAY)
+            parent.update_idletasks()
+
+            def _progress(cur, total, name):
+                out_label.config(text=f"下載中… ({cur}/{total}) {name}", fg=GRAY)
+                parent.update_idletasks()
+
+            try:
+                count, failed = trello_download_cards(
+                    selected_cards, output_dir, api_key, token, progress_cb=_progress)
+                if failed:
+                    out_label.config(
+                        text=f"✔  完成 {count} 張，{len(failed)} 個附件失敗", fg="#e67e22")
+                    messagebox.showwarning("部分附件失敗",
+                        "以下附件下載失敗：\n" + "\n".join(failed), parent=parent)
+                else:
+                    out_label.config(
+                        text=f"✔  成功下載 {count} 張卡片至：{output_dir}", fg="#1e8449")
+                if messagebox.askyesno("下載完成",
+                        f"共 {count} 張卡片\n\n是否立即開啟資料夾？", parent=parent):
+                    os.startfile(str(output_dir))
+            except Exception as e:
+                out_label.config(text=f"✘  {e}", fg="#c0392b")
+                messagebox.showerror("下載失敗", str(e), parent=parent)
+
+        bb = tk.Frame(parent, bg=BG, pady=6)
+        bb.pack(fill="x", padx=12)
+        tk.Button(bb, text="⬇  下載選取的卡片", command=_download,
+                  bg="#1a5276", fg="white", relief="flat",
+                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
+
+    # ════════════════════════════════════════════════════════
+    #  路徑設定 Dialog
+    # ════════════════════════════════════════════════════════
+    def _open_paths_dialog(self):
+        BG     = "#f4f6f8"
+        GRAY   = "#5d6d7e"
+        FONT   = ("Microsoft JhengHei UI", 10)
+        FONTB  = ("Microsoft JhengHei UI", 10, "bold")
+        FONT_S = ("Microsoft JhengHei UI", 9)
         PAD    = {"padx": 8, "pady": 5}
+
+        dlg = tk.Toplevel(self)
+        dlg.title("⚙  路徑設定")
+        dlg.configure(bg=BG)
+        dlg.resizable(True, False)
+        dlg.grab_set()
+        dlg.update_idletasks()
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        dlg.geometry(f"700x340+{(sw-700)//2}+{(sh-340)//2}")
 
         items = [
             ("output_shipping",   "出貨單 / 維修單 輸出資料夾", False),
             ("output_inspection", "驗機單 輸出資料夾",          False),
             ("output_tag",        "維修掛件 輸出資料夾",        False),
             ("output_label",      "標籤 輸出資料夾",            False),
+            ("download_cards_dir","下載卡片 輸出資料夾",        False),
             ("schedule_file",     "出貨行程表 .xlsx",           True),
             ("production_file",   "生產群組紀錄 .xlsx",         True),
         ]
 
-        lf = tk.LabelFrame(parent, text="輸出路徑設定", bg=BG, font=FONTB)
+        lf = tk.LabelFrame(dlg, text="輸出路徑設定", bg=BG, font=FONTB)
         lf.pack(fill="x", padx=16, pady=(16, 8))
         lf.columnconfigure(1, weight=1)
 
@@ -1322,16 +1518,17 @@ class App(tk.Tk):
             for key, var in path_vars.items():
                 self._config["paths"][key] = var.get().strip()
             _save_config(self._config)
-            messagebox.showinfo("已儲存", "路徑設定已儲存", parent=parent)
+            messagebox.showinfo("已儲存", "路徑設定已儲存", parent=dlg)
+            dlg.destroy()
 
-        bb = tk.Frame(parent, bg=BG)
-        bb.pack(fill="x", padx=16, pady=4)
+        bb = tk.Frame(dlg, bg=BG)
+        bb.pack(fill="x", padx=16, pady=8)
         tk.Button(bb, text="還原預設值", command=_reset_defaults,
                   bg="#5d6d7e", fg="white", relief="flat",
                   font=FONT, padx=10).pack(side="left", padx=(0, 8))
-        tk.Button(bb, text="儲存設定", command=_save,
+        tk.Button(bb, text="儲存並關閉", command=_save,
                   bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 11, "bold"), padx=16, pady=6).pack(side="left")
+                  font=FONTB, padx=16, pady=6).pack(side="left")
 
     # ════════════════════════════════════════════════════════
     def _open_file(self):
@@ -1476,6 +1673,7 @@ class App(tk.Tk):
         "output_label":      r"Z:\出貨單\Quoteflow_output",
         "schedule_file":     r"Z:\會計\5.出貨相關\出貨行程表.xlsx",
         "production_file":   r"Z:\會計\●使用表格\公司帳務\1.帳務資料\▲生產群組紀錄(新版)\生產群組紀錄2026(115年).xlsx",
+        "download_cards_dir": r"Z:\出貨單\Quoteflow_output\下載卡片",
     }
 
     def _get_path(self, key: str) -> Path:

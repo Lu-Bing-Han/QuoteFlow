@@ -132,12 +132,21 @@ def events_to_rows(events: list) -> list:
 
 
 def _maps_query(row: dict) -> str:
-    """Extract best address string for Google Maps from a row."""
-    loc = (row["ev"].get("location") or "").strip()
-    if loc:
-        return loc
-    m = re.search(r'\(([^)]+)\)', row["location"])
-    return m.group(1) if m else row["location"]
+    """Extract best address string for Google Maps from a row.
+
+    Prioritises the user-editable row["location"] so manual edits in the GUI
+    are reflected when calculating travel times.
+    """
+    # 1. 先從 row["location"]（使用者可編輯）的括號內取地址
+    m = re.search(r'[\(（]([^)）]+)[)）]', row["location"])
+    if m:
+        return m.group(1)
+    # 2. fallback：原始 Timetree event 的 location 欄位
+    ev_loc = (row["ev"].get("location") or "").strip()
+    if ev_loc:
+        return ev_loc
+    # 3. 最後用整個 location 字串
+    return row["location"]
 
 
 def sort_rows_by_location(rows: list, api_key: str, south_to_north: bool = True) -> tuple[list, list]:

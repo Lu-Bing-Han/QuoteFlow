@@ -89,8 +89,10 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
         c_val = str(row[2].value or "").strip()   # 公司名
         d_val = str(row[3].value or "").strip()   # 聯絡人
         f_val = row[5].value                       # 電話/手機
-        g_val = str(row[6].value or "").strip()   # 電子信箱
-        h_val = str(row[7].value or "").strip()   # 統一編號
+        g_val = str(row[6].value or "").strip()   # 傳真
+        h_val = str(row[7].value or "").strip()   # 地址
+        i_val = str(row[8].value or "").strip()   # 電子信箱
+        j_val = str(row[9].value or "").strip()   # 統一編號
 
         mobile, phone = _parse_phones(f_val)
 
@@ -99,10 +101,10 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
             f"聯絡人：{d_val}\n"
             f"手機：{mobile}\n"
             f"電話：{phone}\n"
-            f"傳真：\n"
-            f"電子信箱：{g_val}\n"
-            f"統一編號：{h_val}\n"
-            f"地址："
+            f"傳真：{g_val}\n"
+            f"電子信箱：{i_val}\n"
+            f"統一編號：{j_val}\n"
+            f"地址：{h_val}"
         )
 
         cards.append({"row": row_idx, "seq": a_val, "title": title, "desc": desc})
