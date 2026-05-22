@@ -4,8 +4,10 @@ app.py  —  報價單 → 出貨單 / 驗機單 / 維修單 轉換工具 (Tkint
 
 import json, os, subprocess, sys, tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from datetime import datetime
+from datetime import datetime, date as date_type
 from pathlib import Path
+
+from tkcalendar import DateEntry
 
 sys.path.insert(0, str(Path(__file__).parent))
 from parser import parse
@@ -20,6 +22,7 @@ from syncer_sheets import sync_cards
 from syncer_production import sync_production
 from creator_trello import read_excel_cards, create_cards as trello_create_cards, get_sheet_names
 from downloader_trello import get_board_lists, get_list_cards, download_cards as trello_download_cards
+from generator_quote import parse_card_desc, next_quote_no
 
 from _paths import CONFIG_PATH, ICON_PATH, TEMPLATE_DIR, EXE_DIR
 
@@ -78,11 +81,16 @@ class App(tk.Tk):
         FONT  = ("Microsoft JhengHei UI", 10)
         FONTB = ("Microsoft JhengHei UI", 10, "bold")
         BG    = "#f4f6f8"
+        NAV_BG      = "#1b2631"
+        NAV_ACTIVE  = "#1a5276"
+        NAV_HOVER   = "#2e4057"
+        NAV_FG      = "#d5d8dc"
+        NAV_GRP_FG  = "#7f8c8d"
 
         # ── Top bar ──────────────────────────────────────────
         top = tk.Frame(self, bg="#1a5276", pady=8)
         top.pack(fill="x")
-        tk.Label(top, text="立善科技｜報價單轉單工具",
+        tk.Label(top, text="立善科技｜QuoteFlow",
                  bg="#1a5276", fg="white",
                  font=("Microsoft JhengHei UI", 14, "bold")).pack(side="left", padx=16)
         tk.Button(top, text="選擇報價單 .xlsx ▶", command=self._open_file,
@@ -96,46 +104,748 @@ class App(tk.Tk):
                                     bg=BG, fg="#c0392b", font=FONT)
         self._file_label.pack(anchor="w", padx=16, pady=(3, 0))
 
-        # ── Notebook ─────────────────────────────────────────
-        style = ttk.Style()
-        style.configure("TNotebook", background="#dde1e6", tabmargins=[0, 4, 0, 0])
-        style.configure("TNotebook.Tab", font=FONT, padding=[14, 6])
+        # ── 主體：側邊列 + 內容區 ────────────────────────────
+        body = tk.Frame(self, bg=BG)
+        body.pack(fill="both", expand=True)
 
-        nb = ttk.Notebook(self)
-        nb.pack(fill="both", expand=True, padx=0, pady=0)
+        # ── 左側導覽列 ────────────────────────────────────────
+        nav = tk.Frame(body, bg=NAV_BG, width=130)
+        nav.pack(side="left", fill="y")
+        nav.pack_propagate(False)
 
-        tab_ship  = tk.Frame(nb, bg=BG)
-        tab_insp  = tk.Frame(nb, bg=BG)
-        tab_fix   = tk.Frame(nb, bg=BG)
-        tab_tag   = tk.Frame(nb, bg=BG)
-        tab_label = tk.Frame(nb, bg=BG)
-        tab_sched    = tk.Frame(nb, bg=BG)
-        tab_overview = tk.Frame(nb, bg=BG)
-        tab_prod     = tk.Frame(nb, bg=BG)
-        tab_create   = tk.Frame(nb, bg=BG)
-        tab_download = tk.Frame(nb, bg=BG)
+        content_area = tk.Frame(body, bg=BG)
+        content_area.pack(side="left", fill="both", expand=True)
 
-        nb.add(tab_ship,     text="  出貨單  ")
-        nb.add(tab_insp,     text="  驗機單  ")
-        nb.add(tab_fix,      text="  維修單  ")
-        nb.add(tab_tag,      text="  維修掛件  ")
-        nb.add(tab_label,    text="  標籤生成  ")
-        nb.add(tab_sched,    text="  出貨排程  ")
-        nb.add(tab_overview, text="  出貨一覽表  ")
-        nb.add(tab_prod,     text="  生產群組紀錄  ")
-        nb.add(tab_create,   text="  建立卡片  ")
-        nb.add(tab_download, text="  下載卡片  ")
+        # ── 頁面 Frame（每個功能一個，重疊在 content_area）──────
+        self._pages: dict[str, tk.Frame] = {}
+        self._nav_btns: dict[str, tk.Label] = {}
+        self._active_page: str = ""
 
-        self._build_tab_shipping(tab_ship,    PAD, FONT, FONTB, BG)
-        self._build_tab_inspection(tab_insp,  PAD, FONT, FONTB, BG)
-        self._build_tab_fix(tab_fix,          PAD, FONT, FONTB, BG)
-        self._build_tab_tag(tab_tag,          PAD, FONT, FONTB, BG)
-        self._build_tab_label(tab_label,      FONT, FONTB, BG)
-        self._build_tab_schedule(tab_sched,   FONT, FONTB, BG)
-        self._build_tab_overview(tab_overview, FONT, FONTB, BG)
-        self._build_tab_production(tab_prod,  FONT, FONTB, BG)
-        self._build_tab_create_cards(tab_create, FONT, FONTB, BG)
-        self._build_tab_download_cards(tab_download, FONT, FONTB, BG)
+        def _show(key: str):
+            if self._active_page and self._active_page in self._nav_btns:
+                self._nav_btns[self._active_page].config(bg=NAV_BG)
+            for f in self._pages.values():
+                f.pack_forget()
+            self._pages[key].pack(fill="both", expand=True)
+            self._nav_btns[key].config(bg=NAV_ACTIVE)
+            self._active_page = key
+
+        self._show_page = _show
+
+        def _make_page(key: str) -> tk.Frame:
+            f = tk.Frame(content_area, bg=BG)
+            self._pages[key] = f
+            return f
+
+        # ── 導覽列項目生成 ────────────────────────────────────
+        def _nav_group(text: str):
+            tk.Label(nav, text=text, bg=NAV_BG, fg=NAV_GRP_FG,
+                     font=("Microsoft JhengHei UI", 8),
+                     anchor="w", padx=10, pady=0).pack(fill="x", pady=(10, 1))
+            tk.Frame(nav, bg=NAV_HOVER, height=1).pack(fill="x", padx=8)
+
+        def _nav_item(text: str, key: str):
+            lbl = tk.Label(nav, text=f"  {text}", bg=NAV_BG, fg=NAV_FG,
+                           font=("Microsoft JhengHei UI", 9),
+                           anchor="w", padx=6, pady=7, cursor="hand2")
+            lbl.pack(fill="x")
+            lbl.bind("<Button-1>", lambda e, k=key: _show(k))
+            lbl.bind("<Enter>",    lambda e, b=lbl, k=key:
+                         b.config(bg=NAV_HOVER) if self._active_page != k else None)
+            lbl.bind("<Leave>",    lambda e, b=lbl, k=key:
+                         b.config(bg=NAV_ACTIVE if self._active_page == k else NAV_BG))
+            self._nav_btns[key] = lbl
+
+        # ── 導覽結構 ──────────────────────────────────────────
+        _nav_group("📄  單據生成")
+        _nav_item("出貨單",   "shipping")
+        _nav_item("報價單",   "quote")
+        _nav_item("驗機單",   "inspection")
+        _nav_item("維修單",   "fix")
+        _nav_item("維修掛件", "tag")
+        _nav_item("標籤生成", "label")
+
+        _nav_group("📅  排程")
+        _nav_item("出貨排程", "schedule")
+
+        _nav_group("🃏  Trello")
+        _nav_item("出貨一覽表",   "overview")
+        _nav_item("生產群組紀錄", "production")
+        _nav_item("建立卡片",     "create")
+        _nav_item("下載卡片",     "download")
+
+        # ── 建立各頁面內容 ────────────────────────────────────
+        self._build_tab_shipping(   _make_page("shipping"),   PAD, FONT, FONTB, BG)
+        self._build_tab_quote(      _make_page("quote"),      FONT, FONTB, BG)
+        self._build_tab_inspection( _make_page("inspection"), PAD, FONT, FONTB, BG)
+        self._build_tab_fix(        _make_page("fix"),        PAD, FONT, FONTB, BG)
+        self._build_tab_tag(        _make_page("tag"),        PAD, FONT, FONTB, BG)
+        self._build_tab_label(      _make_page("label"),      FONT, FONTB, BG)
+        self._build_tab_schedule(   _make_page("schedule"),   FONT, FONTB, BG)
+        self._build_tab_overview(   _make_page("overview"),   FONT, FONTB, BG)
+        self._build_tab_production( _make_page("production"), FONT, FONTB, BG)
+        self._build_tab_create_cards( _make_page("create"),   FONT, FONTB, BG)
+        self._build_tab_download_cards(_make_page("download"),FONT, FONTB, BG)
+
+        # 預設顯示出貨單
+        _show("shipping")
+
+    # ════════════════════════════════════════════════════════
+    #  報價單生成（麥當勞三步驟流程）
+    # ════════════════════════════════════════════════════════
+    def _build_tab_quote(self, parent, FONT, FONTB, BG):
+        import json as _json
+        from generator_quote import load_product_catalog, generate_quote_from_cart
+
+        GRAY   = "#5d6d7e"
+        BLUE   = "#1a4a7a"
+        GREEN  = "#1e8449"
+        FONT_S = ("Microsoft JhengHei UI", 9)
+        MONO   = ("Consolas", 9)
+        _TARGET_LIST = "1.待報價(evaluate)"
+
+        # ── 狀態 ────────────────────────────────────────────
+        _all_cards:      list[dict]      = []
+        _filtered_cards: list[dict]      = []
+        _card:           list[dict|None] = [None]   # 選中的 Trello card
+        _customer:       dict            = {}        # 解析後客戶資料
+        _cart:           dict            = {}        # code → {product, qty, price}
+        _cur_cat:        list[str]       = ["all"]
+        _products: list[dict] = load_product_catalog(TEMPLATE_DIR)
+        CATS = ["全部"] + sorted({p["category"] for p in _products})
+
+        # ════════════════════════════════════════════════════
+        # 右側購物車 Panel（固定 272px，所有步驟皆顯示）
+        # ════════════════════════════════════════════════════
+        body = tk.Frame(parent, bg=BG)
+        body.pack(fill="both", expand=True)
+
+        left_area = tk.Frame(body, bg=BG)
+        left_area.pack(side="left", fill="both", expand=True)
+
+        right_border = tk.Frame(body, bg="#c8cfd6", width=1)
+        right_border.pack(side="right", fill="y")
+        right_border.pack_propagate(False)
+
+        cart_panel = tk.Frame(body, bg=BG, width=272)
+        cart_panel.pack(side="right", fill="y")
+        cart_panel.pack_propagate(False)
+
+        # 購物車 Header
+        ch = tk.Frame(cart_panel, bg="#e8ecf0")
+        ch.pack(fill="x")
+        tk.Label(ch, text="🛒  報價清單", bg="#e8ecf0", fg=BLUE,
+                 font=(FONTB[0], 10, "bold"), pady=7).pack(side="left", padx=10)
+        cart_cnt_lbl = tk.Label(ch, text="", bg="#e8ecf0", fg=GRAY, font=FONT_S)
+        cart_cnt_lbl.pack(side="right", padx=10)
+
+        # 購物車 可捲動 items
+        cart_mid = tk.Frame(cart_panel, bg=BG)
+        cart_mid.pack(fill="both", expand=True)
+        cart_cvs = tk.Canvas(cart_mid, bg=BG, highlightthickness=0)
+        cart_sb  = ttk.Scrollbar(cart_mid, orient="vertical", command=cart_cvs.yview)
+        cart_cvs.configure(yscrollcommand=cart_sb.set)
+        cart_sb.pack(side="right", fill="y")
+        cart_cvs.pack(side="left", fill="both", expand=True)
+        cart_inner = tk.Frame(cart_cvs, bg=BG)
+        _cart_win  = cart_cvs.create_window((0, 0), window=cart_inner, anchor="nw")
+
+        def _on_cart_resize(e=None):
+            cart_cvs.configure(scrollregion=cart_cvs.bbox("all"))
+            if cart_cvs.winfo_width() > 1:
+                cart_cvs.itemconfig(_cart_win, width=cart_cvs.winfo_width())
+        cart_inner.bind("<Configure>", _on_cart_resize)
+        cart_cvs.bind("<Configure>",   _on_cart_resize)
+
+        # 購物車 Footer
+        cf = tk.Frame(cart_panel, bg="#f0f4f8", bd=1, relief="ridge")
+        cf.pack(fill="x")
+        cart_sub_lbl = tk.Label(cf, text="小計：—", bg="#f0f4f8", fg=GRAY,
+                                 font=FONT_S, anchor="e")
+        cart_sub_lbl.pack(fill="x", padx=10, pady=(7, 1))
+        cart_tax_lbl = tk.Label(cf, text="營業稅 5%：—", bg="#f0f4f8", fg=GRAY,
+                                 font=FONT_S, anchor="e")
+        cart_tax_lbl.pack(fill="x", padx=10, pady=1)
+        cart_tot_lbl = tk.Label(cf, text="合計：—", bg="#f0f4f8",
+                                 font=(FONTB[0], 10, "bold"), fg=BLUE, anchor="e")
+        cart_tot_lbl.pack(fill="x", padx=10, pady=(1, 4))
+        checkout_btn = tk.Button(cf, text="確認報價內容 →", state="disabled",
+                                  bg=BLUE, fg="white", relief="flat",
+                                  font=FONT_S, pady=5)
+        checkout_btn.pack(fill="x", padx=8, pady=(0, 8))
+
+        def _fmt(n): return f"${int(round(n)):,}"
+
+        def _render_cart():
+            for w in cart_inner.winfo_children():
+                w.destroy()
+            items = [(c, v) for c, v in _cart.items() if v["qty"] > 0]
+            if not items:
+                tk.Label(cart_inner, text="\n📦\n點擊左側產品加入",
+                         bg=BG, fg=GRAY, font=FONT_S, justify="center"
+                         ).pack(pady=20)
+                cart_cnt_lbl.config(text="")
+                cart_sub_lbl.config(text="小計：—")
+                cart_tax_lbl.config(text="營業稅 5%：—")
+                cart_tot_lbl.config(text="合計：—")
+                checkout_btn.config(state="disabled")
+                return
+            total_qty = sum(v["qty"] for _, v in items)
+            cart_cnt_lbl.config(text=f"{total_qty} 項")
+            for code, item in items:
+                if_f = tk.Frame(cart_inner, bg=BG)
+                if_f.pack(fill="x", padx=6, pady=3)
+                tk.Frame(cart_inner, bg="#dee2e6", height=1).pack(fill="x", padx=4)
+                tk.Label(if_f, text=code, bg=BG, fg=GRAY, font=MONO, anchor="w"
+                         ).pack(fill="x")
+                name_t = item["product"]["name"]
+                if len(name_t) > 22: name_t = name_t[:20] + "…"
+                tk.Label(if_f, text=name_t, bg=BG, fg="#2c3e50",
+                         font=(FONT_S[0], 9, "bold"), anchor="w").pack(fill="x")
+                ctrl = tk.Frame(if_f, bg=BG)
+                ctrl.pack(fill="x", pady=(2, 0))
+
+                def _dec(c=code):
+                    _cart[c]["qty"] -= 1
+                    if _cart[c]["qty"] <= 0:
+                        del _cart[c]
+                    _render_cart()
+                    _render_products()
+
+                def _inc(c=code):
+                    _cart[c]["qty"] += 1
+                    _render_cart()
+                    _render_products()
+
+                tk.Button(ctrl, text="−", command=_dec, width=2, font=FONT_S,
+                          relief="flat", bg="#dee2e6", fg="#333").pack(side="left")
+                tk.Label(ctrl, text=str(item["qty"]), bg=BG, fg="#2c3e50",
+                         font=FONT_S, width=3).pack(side="left")
+                tk.Button(ctrl, text="＋", command=_inc, width=2, font=FONT_S,
+                          relief="flat", bg="#dee2e6", fg="#333").pack(side="left")
+                tk.Label(ctrl, text="  ￥", bg=BG, fg=GRAY, font=FONT_S
+                         ).pack(side="left")
+                pv = tk.StringVar(value=str(int(item["price"])))
+
+                def _price_changed(pvar=pv, c=code, *_):
+                    try:
+                        _cart[c]["price"] = float(pvar.get().replace(",", ""))
+                    except ValueError:
+                        pass
+                    _update_cart_totals()
+
+                pv.trace_add("write", _price_changed)
+                tk.Entry(ctrl, textvariable=pv, width=7, font=FONT_S
+                         ).pack(side="left")
+                sub = item["qty"] * item["price"]
+                tk.Label(if_f, text=f"= {_fmt(sub)}", bg=BG, fg=GRAY,
+                         font=FONT_S, anchor="e").pack(fill="x")
+            _update_cart_totals()
+
+        def _update_cart_totals():
+            items = [v for v in _cart.values() if v["qty"] > 0]
+            sub   = sum(v["qty"] * v["price"] for v in items)
+            tax   = round(sub * 0.05)
+            tot   = sub + tax
+            cart_sub_lbl.config(text=f"小計：{_fmt(sub)}")
+            cart_tax_lbl.config(text=f"營業稅 5%：{_fmt(tax)}")
+            cart_tot_lbl.config(text=f"合計：{_fmt(tot)}")
+            checkout_btn.config(state="normal" if items else "disabled")
+
+        # ════════════════════════════════════════════════════
+        # Step Bar（步驟進度列）
+        # ════════════════════════════════════════════════════
+        step_bar = tk.Frame(left_area, bg="#e8ecf0")
+        step_bar.pack(fill="x")
+        _step_btns: list[tk.Label] = []
+        for i, txt in enumerate(["① 顧客資料", "② 選取品項", "③ 報價確認"], 1):
+            lbl = tk.Label(step_bar, text=txt, bg="#e8ecf0", fg=GRAY,
+                           font=FONT_S, pady=7, cursor="hand2")
+            lbl.pack(side="left", expand=True, fill="x")
+            lbl.bind("<Button-1>", lambda e, n=i: _go_step(n))
+            _step_btns.append(lbl)
+            if i < 3:
+                tk.Frame(step_bar, bg="#c8cfd6", width=1).pack(side="left", fill="y")
+
+        step_content = tk.Frame(left_area, bg=BG)
+        step_content.pack(fill="both", expand=True)
+
+        # ════════════════════════════════════════════════════
+        # Step 1 — 顧客資料
+        # ════════════════════════════════════════════════════
+        p1 = tk.Frame(step_content, bg=BG)
+
+        # Trello 載入列
+        p1_top = tk.Frame(p1, bg=BG)
+        p1_top.pack(fill="x", padx=10, pady=(8, 2))
+        tk.Label(p1_top, text=f"來源：{_TARGET_LIST}",
+                 bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        p1_status = tk.Label(p1_top, text="", bg=BG, font=FONT_S, fg=GRAY)
+        p1_status.pack(side="left", padx=8)
+
+        def _get_tr_creds():
+            tr_cfg  = self._config.get("trello", {})
+            api_key = tr_cfg.get("api_key", "").strip()
+            token   = tr_cfg.get("token",   "").strip()
+            if not api_key or not token:
+                messagebox.showwarning("憑證未設定",
+                    "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證", parent=parent)
+                return None, None
+            return api_key, token
+
+        def _refresh_card_tree(cards):
+            _filtered_cards.clear()
+            _filtered_cards.extend(cards)
+            card_tree.delete(*card_tree.get_children())
+            for card in cards:
+                desc    = parse_card_desc(card.get("desc", ""))
+                company = desc.get("公司名") or desc.get("公司名稱", "")
+                card_tree.insert("", "end", values=(
+                    card["name"], company, desc.get("聯絡人", "")))
+            if card_tree.get_children():
+                card_tree.selection_set(card_tree.get_children()[0])
+                _on_card_select()
+            shown = len(cards)
+            total = len(_all_cards)
+            card_lf.config(
+                text=f"待報價卡片（共 {total} 張{'，顯示 '+str(shown)+' 張' if shown<total else ''}）")
+
+        def _apply_card_search(*_):
+            kw = p1_search_var.get().strip().lower()
+            matched = [c for c in _all_cards if kw in c["name"].lower()] if kw else list(_all_cards)
+            _refresh_card_tree(matched)
+
+        def _load_cards():
+            api_key, token = _get_tr_creds()
+            if not api_key: return
+            p1_status.config(text="載入中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                lists  = get_board_lists(api_key, token)
+                target = next((l for l in lists
+                               if "待報價" in l["name"] or "evaluate" in l["name"].lower()), None)
+                if not target:
+                    p1_status.config(text=f'✘ 找不到清單', fg="#c0392b"); return
+                cards = get_list_cards(target["id"], api_key, token)
+                _all_cards.clear(); _all_cards.extend(cards)
+                p1_search_var.set("")
+                _refresh_card_tree(_all_cards)
+                p1_status.config(text=f"✔ 找到 {len(cards)} 張", fg=GREEN)
+            except Exception as e:
+                p1_status.config(text=f"✘ {e}", fg="#c0392b")
+
+        tk.Button(p1_top, text="🔄 載入", command=_load_cards,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT_S, padx=8).pack(side="right")
+
+        # 搜索列
+        p1_search_row = tk.Frame(p1, bg=BG)
+        p1_search_row.pack(fill="x", padx=10, pady=(0, 2))
+        tk.Label(p1_search_row, text="🔍", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        p1_search_var = tk.StringVar()
+        tk.Entry(p1_search_row, textvariable=p1_search_var,
+                 font=FONT_S, width=28).pack(side="left", padx=(2, 4))
+        tk.Button(p1_search_row, text="清除", command=lambda: p1_search_var.set(""),
+                  bg="#5d6d7e", fg="white", relief="flat", font=FONT_S, padx=4
+                  ).pack(side="left")
+        p1_search_var.trace_add("write", _apply_card_search)
+
+        # 卡片 Treeview
+        card_lf = tk.LabelFrame(p1, text="待報價卡片（共 0 張）", bg=BG, font=FONT_S)
+        card_lf.pack(fill="both", expand=True, padx=10, pady=2)
+        _ccols = ("name", "company", "contact")
+        card_tree = ttk.Treeview(card_lf, columns=_ccols, show="headings",
+                                  selectmode="browse", height=5)
+        card_tree.heading("name",    text="卡片標題")
+        card_tree.heading("company", text="公司名")
+        card_tree.heading("contact", text="聯絡人")
+        card_tree.column("name",    width=230, anchor="w", stretch=True)
+        card_tree.column("company", width=130, anchor="w", stretch=False)
+        card_tree.column("contact", width=80,  anchor="w", stretch=False)
+        ct_vsb = ttk.Scrollbar(card_lf, orient="vertical", command=card_tree.yview)
+        card_tree.configure(yscrollcommand=ct_vsb.set)
+        card_tree.pack(side="left", fill="both", expand=True)
+        ct_vsb.pack(side="right", fill="y")
+
+        # 報價設定列（放在客戶資料上方，日曆才不會被遮住）
+        cfg_f = tk.LabelFrame(p1, text="報價設定", bg=BG, font=FONT_S)
+        cfg_f.pack(fill="x", padx=10, pady=(4, 2))
+
+        cfg_row0 = tk.Frame(cfg_f, bg=BG)
+        cfg_row0.pack(fill="x", padx=6, pady=(4, 2))
+        tk.Label(cfg_row0, text="製表人員：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        operators = self._config.get("operators", ["小皋"])
+        op_var  = tk.StringVar(value=operators[0] if operators else "")
+        op_cb   = ttk.Combobox(cfg_row0, textvariable=op_var, values=operators,
+                                font=FONT_S, state="readonly", width=10)
+        op_cb.pack(side="left", padx=(0, 16))
+
+        tk.Label(cfg_row0, text="報價日期：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        date_entry = DateEntry(cfg_row0, font=FONT_S, date_pattern="yyyy/mm/dd",
+                               width=12, background="#2e86c1", foreground="white",
+                               borderwidth=1)
+        date_entry.pack(side="left", padx=(0, 6))
+
+        cfg_row1 = tk.Frame(cfg_f, bg=BG)
+        cfg_row1.pack(fill="x", padx=6, pady=(2, 6))
+        valid_lbl = tk.Label(cfg_row1, text="", bg=BG, font=FONT_S, fg=GRAY)
+        valid_lbl.pack(side="left", padx=(0, 16))
+        tk.Label(cfg_row1, text="報價單號：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        quote_no_var = tk.StringVar()
+        tk.Entry(cfg_row1, textvariable=quote_no_var, font=FONT_S, width=16
+                 ).pack(side="left", padx=(0, 6))
+
+        def _update_valid_label(*_):
+            try:
+                from datetime import timedelta as _td
+                d  = date_entry.get_date()
+                vd = d + _td(days=15)
+                valid_lbl.config(text=f"有效日期：{vd.strftime('%Y/%m/%d')}")
+                _refresh_quote_no()
+            except Exception:
+                pass
+
+        def _refresh_quote_no(*_):
+            try:
+                d     = date_entry.get_date()
+                op    = op_var.get().strip()
+                codes = self._config.get("operator_codes", {})
+                code  = codes.get(op, op[:1].upper() if op else "X")
+                no    = next_quote_no(self._get_path("output_quote"), code, d)
+                quote_no_var.set(no)
+            except Exception:
+                pass
+
+        date_entry.bind("<<DateEntrySelected>>", _update_valid_label)
+        op_var.trace_add("write", _refresh_quote_no)
+        _update_valid_label()
+
+        # 客戶資訊預覽區
+        cust_lf = tk.LabelFrame(p1, text="客戶資料", bg=BG, font=FONT_S)
+        cust_lf.pack(fill="x", padx=10, pady=(2, 4))
+        cust_lf.columnconfigure(1, weight=1)
+        cust_lf.columnconfigure(3, weight=1)
+        _cust_vars: dict[str, tk.StringVar] = {}
+        for r, (label, key) in enumerate([
+            ("公司名稱", "company"), ("聯絡人", "contact"),
+            ("電話",     "phone"),   ("傳真",   "fax"),
+            ("地址",     "address"), ("統一編號","tax_id"),
+            ("E-MAIL",   "email"),
+        ]):
+            col = (r % 2) * 2
+            row_i = r // 2
+            tk.Label(cust_lf, text=label + "：", bg=BG, fg=GRAY,
+                     font=FONT_S, anchor="e").grid(row=row_i, column=col, sticky="e",
+                                                    padx=(6, 2), pady=2)
+            sv = tk.StringVar()
+            _cust_vars[key] = sv
+            tk.Entry(cust_lf, textvariable=sv, font=FONT_S, state="readonly",
+                     width=18).grid(row=row_i, column=col+1, sticky="ew", padx=(0, 8), pady=2)
+
+        def _strip_md_link(text: str) -> str:
+            """去除 Trello Markdown 連結格式，只保留顯示文字。
+            [text](url) → text
+            """
+            import re as _re
+            return _re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', text).strip()
+
+        def _on_card_select(*_):
+            sel = card_tree.selection()
+            if not sel: return
+            idx  = card_tree.index(sel[0])
+            card = _filtered_cards[idx]
+            _card[0] = card
+            desc = parse_card_desc(card.get("desc", ""))
+
+            def _g(*keys):
+                for k in keys:
+                    v = desc.get(k)
+                    if v: return _strip_md_link(v)
+                return ""
+
+            _customer.clear()
+            _customer.update({
+                "company": _g("公司名", "公司名稱"),
+                "contact": _g("聯絡人"),
+                "phone":   _g("手機", "電話"),
+                "fax":     _g("傳真"),
+                "address": _g("地址", "聯絡地址"),
+                "tax_id":  _g("統一編號", "统一編號", "统編", "統編"),
+                "email":   _g("電子信箱", "E-MAIL", "EMAIL"),
+            })
+            for key, sv in _cust_vars.items():
+                sv.set(_customer.get(key, ""))
+
+        card_tree.bind("<<TreeviewSelect>>", _on_card_select)
+
+        p1_next_btn = tk.Button(p1, text="下一步：選取品項 →",
+                                 command=lambda: _go_step(2),
+                                 bg=BLUE, fg="white", relief="flat",
+                                 font=(FONT_S[0], 10, "bold"), pady=7)
+        p1_next_btn.pack(fill="x", padx=10, pady=(2, 8))
+
+        # ════════════════════════════════════════════════════
+        # Step 2 — 選取品項
+        # ════════════════════════════════════════════════════
+        p2 = tk.Frame(step_content, bg=BG)
+
+        # 分類 Tabs
+        cat_bar = tk.Frame(p2, bg=BG)
+        cat_bar.pack(fill="x", padx=10, pady=(8, 4))
+        _cat_btns: dict[str, tk.Button] = {}
+
+        def _set_cat(cat: str):
+            _cur_cat[0] = cat
+            for c, b in _cat_btns.items():
+                b.config(bg=BLUE if c == cat else "#dee2e6",
+                         fg="white" if c == cat else "#333")
+            _render_products()
+
+        for cat in CATS:
+            b = tk.Button(cat_bar, text=cat, font=FONT_S, relief="flat",
+                          bg="#dee2e6", fg="#333", padx=8, pady=3,
+                          command=lambda c=cat: _set_cat(c))
+            b.pack(side="left", padx=(0, 4))
+            _cat_btns[cat] = b
+        # _set_cat(CATS[0]) 移到 _render_products 定義之後執行
+
+        # 產品格狀列表（Canvas + 2欄）
+        prod_outer = tk.Frame(p2, bg=BG)
+        prod_outer.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+
+        prod_cvs = tk.Canvas(prod_outer, bg=BG, highlightthickness=0)
+        prod_sb  = ttk.Scrollbar(prod_outer, orient="vertical", command=prod_cvs.yview)
+        prod_cvs.configure(yscrollcommand=prod_sb.set)
+        prod_sb.pack(side="right", fill="y")
+        prod_cvs.pack(side="left", fill="both", expand=True)
+
+        prod_inner = tk.Frame(prod_cvs, bg=BG)
+        _prod_win  = prod_cvs.create_window((0, 0), window=prod_inner, anchor="nw")
+
+        def _on_prod_resize(e=None):
+            prod_cvs.configure(scrollregion=prod_cvs.bbox("all"))
+            if prod_cvs.winfo_width() > 1:
+                prod_cvs.itemconfig(_prod_win, width=prod_cvs.winfo_width())
+        prod_inner.bind("<Configure>", _on_prod_resize)
+        prod_cvs.bind("<Configure>",   _on_prod_resize)
+
+        def _render_products():
+            for w in prod_inner.winfo_children():
+                w.destroy()
+            cat = _cur_cat[0]
+            filtered = [p for p in _products
+                        if cat == "全部" or p.get("category") == cat]
+            for idx, prod in enumerate(filtered):
+                col   = idx % 2
+                row_i = idx // 2
+                in_cart = prod["code"] in _cart and _cart[prod["code"]]["qty"] > 0
+                card_bg = "#d8eaf8" if in_cart else "white"
+                bdr     = BLUE if in_cart else "#d0d7de"
+
+                cf2 = tk.Frame(prod_inner, bg=card_bg, bd=1, relief="solid",
+                               highlightbackground=bdr, highlightthickness=1)
+                cf2.grid(row=row_i, column=col, padx=4, pady=4, sticky="nsew")
+                prod_inner.columnconfigure(col, weight=1)
+
+                tk.Label(cf2, text=prod["code"], bg=card_bg, fg=GRAY,
+                         font=MONO, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
+                # 品名（去掉 code 前綴）
+                disp_name = prod["name"].replace(prod["code"] + " ", "").replace(prod["code"], "")
+                tk.Label(cf2, text=disp_name.strip(), bg=card_bg, fg="#1a1a1a",
+                         font=(FONT_S[0], 9, "bold"), anchor="w",
+                         wraplength=160, justify="left").pack(fill="x", padx=8, pady=(0, 2))
+                tk.Label(cf2, text=prod.get("spec", ""), bg=card_bg, fg=GRAY,
+                         font=(MONO[0], 8), anchor="w",
+                         wraplength=160, justify="left").pack(fill="x", padx=8, pady=(0, 4))
+
+                bot_f = tk.Frame(cf2, bg=card_bg)
+                bot_f.pack(fill="x", padx=8, pady=(0, 6))
+                tk.Label(bot_f, text=f"${prod['price']:,}/{prod['unit']}",
+                         bg=card_bg, fg=BLUE,
+                         font=(FONTB[0], 10, "bold")).pack(side="left")
+
+                def _add(p=prod):
+                    code = p["code"]
+                    if code not in _cart:
+                        _cart[code] = {"product": p, "qty": 0, "price": p["price"]}
+                    _cart[code]["qty"] += 1
+                    _render_cart()
+                    _render_products()
+
+                add_lbl = "✔" if in_cart else "+"
+                add_bg  = GREEN if in_cart else BLUE
+                tk.Button(bot_f, text=add_lbl, command=_add,
+                          bg=add_bg, fg="white", relief="flat",
+                          font=(FONTB[0], 12), width=2, pady=0
+                          ).pack(side="right")
+
+        # 初始化：設定第一個分類並渲染
+        if CATS:
+            _cur_cat[0] = CATS[0]
+            for c, b in _cat_btns.items():
+                b.config(bg=BLUE if c == CATS[0] else "#dee2e6",
+                         fg="white" if c == CATS[0] else "#333")
+        _render_products()
+
+        p2_back_btn = tk.Button(p2, text="← 返回顧客資料",
+                                 command=lambda: _go_step(1),
+                                 bg="#5d6d7e", fg="white", relief="flat",
+                                 font=FONT_S, padx=8, pady=4)
+        p2_back_btn.pack(anchor="w", padx=10, pady=(0, 6))
+
+        # ════════════════════════════════════════════════════
+        # Step 3 — 報價確認
+        # ════════════════════════════════════════════════════
+        p3 = tk.Frame(step_content, bg=BG)
+
+        # 客戶摘要
+        p3_cust_f = tk.LabelFrame(p3, text="客戶資料", bg=BG, font=FONT_S)
+        p3_cust_f.pack(fill="x", padx=10, pady=(8, 4))
+        p3_cust_f.columnconfigure(1, weight=1)
+        p3_cust_f.columnconfigure(3, weight=1)
+        _p3_cust_lbls: dict[str, tk.Label] = {}
+        for r, (label, key) in enumerate([
+            ("公司名稱", "company"), ("聯絡人",  "contact"),
+            ("報價單號", "_quote_no"), ("報價日期", "_quote_date"),
+        ]):
+            col = (r % 2) * 2
+            row_i = r // 2
+            tk.Label(p3_cust_f, text=label + "：", bg=BG, fg=GRAY,
+                     font=FONT_S).grid(row=row_i, column=col, sticky="e", padx=(6, 2), pady=2)
+            lbl = tk.Label(p3_cust_f, text="—", bg=BG, fg="#1a1a1a",
+                           font=(FONT_S[0], 9, "bold"), anchor="w")
+            lbl.grid(row=row_i, column=col+1, sticky="ew", padx=(0, 8), pady=2)
+            _p3_cust_lbls[key] = lbl
+
+        # 品項確認表
+        conf_lf = tk.LabelFrame(p3, text="報價品項", bg=BG, font=FONT_S)
+        conf_lf.pack(fill="both", expand=True, padx=10, pady=4)
+        _ccols3 = ("code", "name", "qty", "price", "subtotal")
+        conf_tree = ttk.Treeview(conf_lf, columns=_ccols3, show="headings",
+                                  selectmode="none", height=6)
+        conf_tree.heading("code",     text="品號")
+        conf_tree.heading("name",     text="品名")
+        conf_tree.heading("qty",      text="數量")
+        conf_tree.heading("price",    text="單價")
+        conf_tree.heading("subtotal", text="小計")
+        conf_tree.column("code",     width=100, anchor="w")
+        conf_tree.column("name",     width=200, anchor="w", stretch=True)
+        conf_tree.column("qty",      width=55,  anchor="center", stretch=False)
+        conf_tree.column("price",    width=80,  anchor="e", stretch=False)
+        conf_tree.column("subtotal", width=90,  anchor="e", stretch=False)
+        conf_tree.pack(fill="both", expand=True)
+
+        # 摘要
+        sum_f = tk.Frame(p3, bg="#f0f4f8", bd=1, relief="ridge")
+        sum_f.pack(fill="x", padx=10, pady=(0, 4))
+        p3_sub_lbl = tk.Label(sum_f, text="小計：—", bg="#f0f4f8", fg=GRAY,
+                               font=FONT_S, anchor="e")
+        p3_sub_lbl.pack(fill="x", padx=12, pady=(6, 1))
+        p3_tax_lbl = tk.Label(sum_f, text="營業稅 5%：—", bg="#f0f4f8", fg=GRAY,
+                               font=FONT_S, anchor="e")
+        p3_tax_lbl.pack(fill="x", padx=12, pady=1)
+        p3_tot_lbl = tk.Label(sum_f, text="應收總金額：—", bg="#f0f4f8",
+                               font=(FONTB[0], 11, "bold"), fg=BLUE, anchor="e")
+        p3_tot_lbl.pack(fill="x", padx=12, pady=(1, 6))
+
+        p3_out_lbl = tk.Label(p3, text="", bg=BG, font=FONT_S, fg=GRAY,
+                               anchor="w", wraplength=620)
+        p3_out_lbl.pack(fill="x", padx=10)
+
+        def _build_confirm():
+            conf_tree.delete(*conf_tree.get_children())
+            items = [v for v in _cart.values() if v["qty"] > 0]
+            sub   = 0
+            for v in items:
+                s = v["qty"] * v["price"]
+                sub += s
+                conf_tree.insert("", "end", values=(
+                    v["product"]["code"],
+                    v["product"]["name"][:30],
+                    f"{v['qty']} {v['product']['unit']}",
+                    f"${int(v['price']):,}",
+                    f"${int(s):,}",
+                ))
+            tax = round(sub * 0.05)
+            p3_sub_lbl.config(text=f"小計：{_fmt(sub)}")
+            p3_tax_lbl.config(text=f"營業稅 5%：{_fmt(tax)}")
+            p3_tot_lbl.config(text=f"應收總金額：{_fmt(sub+tax)}")
+            _p3_cust_lbls["company"].config(    text=_customer.get("company", "—"))
+            _p3_cust_lbls["contact"].config(    text=_customer.get("contact", "—"))
+            _p3_cust_lbls["_quote_no"].config(  text=quote_no_var.get())
+            _p3_cust_lbls["_quote_date"].config( text=date_entry.get_date().strftime("%Y/%m/%d"))
+
+        def _generate():
+            if not _cart:
+                messagebox.showwarning("購物車空白", "請先選取品項", parent=parent); return
+            if not _customer.get("company"):
+                messagebox.showwarning("無客戶資料", "請先在步驟①選取 Trello 卡片", parent=parent); return
+            tpl_path = TEMPLATE_DIR / "template_quote.xlsx"
+            if not tpl_path.exists():
+                messagebox.showerror("找不到範本", f"找不到 {tpl_path}", parent=parent); return
+
+            cart_items = [
+                {**{"code":  v["product"]["code"],
+                    "name":  v["product"]["name"],
+                    "spec":  v["product"].get("spec", ""),
+                    "unit":  v["product"]["unit"],
+                    "qty":   v["qty"],
+                    "price": v["price"]}}
+                for v in _cart.values() if v["qty"] > 0
+            ]
+            q_date   = date_entry.get_date()
+            quote_no = quote_no_var.get().strip()
+            out_dir  = self._get_path("output_quote")
+
+            p3_out_lbl.config(text="生成中…", fg=GRAY)
+            parent.update_idletasks()
+            try:
+                out_path = generate_quote_from_cart(
+                    _customer, cart_items, tpl_path, out_dir, quote_no, q_date,
+                    operator=op_var.get().strip())
+                p3_out_lbl.config(text=f"✔  已生成：{out_path}", fg=GREEN)
+                if messagebox.askyesno("完成",
+                        f"報價單已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
+                    os.startfile(str(out_path))
+            except Exception as e:
+                p3_out_lbl.config(text=f"✘  {e}", fg="#c0392b")
+                messagebox.showerror("生成失敗", str(e), parent=parent)
+
+        gen_btn = tk.Button(p3, text="📄  生成報價單 .xlsx", command=_generate,
+                             bg=GREEN, fg="white", relief="flat",
+                             font=(FONTB[0], 12, "bold"), pady=8)
+        gen_btn.pack(fill="x", padx=10, pady=(0, 6))
+
+        p3_back_btn = tk.Button(p3, text="← 返回選取品項",
+                                 command=lambda: _go_step(2),
+                                 bg="#5d6d7e", fg="white", relief="flat",
+                                 font=FONT_S, padx=8, pady=3)
+        p3_back_btn.pack(anchor="w", padx=10, pady=(0, 4))
+
+        # ════════════════════════════════════════════════════
+        # Step 切換
+        # ════════════════════════════════════════════════════
+        _panels = {1: p1, 2: p2, 3: p3}
+
+        def _go_step(n: int):
+            for i, lbl in enumerate(_step_btns, 1):
+                if i == n:
+                    lbl.config(bg=BLUE, fg="white")
+                elif i < n:
+                    lbl.config(bg="#d5e8f5", fg=BLUE)
+                else:
+                    lbl.config(bg="#e8ecf0", fg=GRAY)
+            for i, panel in _panels.items():
+                if i == n:
+                    panel.pack(fill="both", expand=True)
+                else:
+                    panel.pack_forget()
+            if n == 3:
+                _build_confirm()
+
+        checkout_btn.config(command=lambda: _go_step(3))
+        _render_cart()
+        _go_step(1)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
@@ -1140,9 +1850,10 @@ class App(tk.Tk):
             path_var.set(p)
             try:
                 names = get_sheet_names(Path(p))
-                sheet_cb["values"] = names
-                if names:
-                    sheet_var.set(names[0])
+                # 「全部」放在最前面，可一次讀入所有工作表
+                all_options = ["全部"] + names
+                sheet_cb["values"] = all_options
+                sheet_var.set(all_options[0])
             except Exception:
                 sheet_cb["values"] = []
                 sheet_var.set("")
@@ -1209,9 +1920,15 @@ class App(tk.Tk):
             status_lbl.config(text="讀取中…", fg=GRAY)
             parent.update_idletasks()
             try:
-                selected_sheet = sheet_var.get() or None
+                selected = sheet_var.get()
                 _all_data.clear()
-                _all_data.extend(read_excel_cards(Path(p), sheet_name=selected_sheet))
+                if selected == "全部":
+                    # 取所有工作表名稱（排除「全部」偽選項）
+                    all_sheets = [v for v in sheet_cb["values"] if v != "全部"]
+                    for sname in all_sheets:
+                        _all_data.extend(read_excel_cards(Path(p), sheet_name=sname))
+                else:
+                    _all_data.extend(read_excel_cards(Path(p), sheet_name=selected or None))
                 filter_var.set("")
                 _apply_filter()
                 status_lbl.config(text=f"✔  讀取完成，共 {len(_all_data)} 筆", fg="#1e8449")
@@ -1463,26 +2180,27 @@ class App(tk.Tk):
         PAD    = {"padx": 8, "pady": 5}
 
         dlg = tk.Toplevel(self)
-        dlg.title("⚙  路徑設定")
+        dlg.title("⚙  路徑與人員設定")
         dlg.configure(bg=BG)
         dlg.resizable(True, False)
         dlg.grab_set()
         dlg.update_idletasks()
         sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
-        dlg.geometry(f"700x340+{(sw-700)//2}+{(sh-340)//2}")
+        dlg.geometry(f"720x560+{(sw-720)//2}+{(sh-560)//2}")
 
         items = [
             ("output_shipping",   "出貨單 / 維修單 輸出資料夾", False),
             ("output_inspection", "驗機單 輸出資料夾",          False),
             ("output_tag",        "維修掛件 輸出資料夾",        False),
             ("output_label",      "標籤 輸出資料夾",            False),
+            ("output_quote",      "報價單 輸出資料夾",          False),
             ("download_cards_dir","下載卡片 輸出資料夾",        False),
             ("schedule_file",     "出貨行程表 .xlsx",           True),
             ("production_file",   "生產群組紀錄 .xlsx",         True),
         ]
 
         lf = tk.LabelFrame(dlg, text="輸出路徑設定", bg=BG, font=FONTB)
-        lf.pack(fill="x", padx=16, pady=(16, 8))
+        lf.pack(fill="x", padx=16, pady=(16, 6))
         lf.columnconfigure(1, weight=1)
 
         path_vars: dict[str, tk.StringVar] = {}
@@ -1509,6 +2227,80 @@ class App(tk.Tk):
                       bg="#2e86c1", fg="white", relief="flat",
                       font=FONT_S, padx=6).grid(row=i, column=2, padx=(0, 8), pady=5)
 
+        # ── 人員設定 ─────────────────────────────────────────
+        op_lf = tk.LabelFrame(dlg, text="人員設定（報價單製表人員與單號代號）",
+                              bg=BG, font=FONTB)
+        op_lf.pack(fill="x", padx=16, pady=(0, 6))
+
+        # Treeview 顯示現有人員
+        op_cols = ("name", "code")
+        op_tree = ttk.Treeview(op_lf, columns=op_cols, show="headings",
+                               selectmode="browse", height=4)
+        op_tree.heading("name", text="名稱（放入 Excel 製表人欄）")
+        op_tree.heading("code", text="代號（報價單號前綴）")
+        op_tree.column("name", width=200, anchor="w")
+        op_tree.column("code", width=120, anchor="center")
+        op_tree.pack(fill="x", padx=8, pady=(6, 2))
+
+        # 填入現有資料
+        operators = self._config.get("operators", ["小皋"])
+        op_codes  = self._config.get("operator_codes", {})
+        for name in operators:
+            op_tree.insert("", "end", values=(name, op_codes.get(name, "")))
+
+        # 新增 / 刪除 列
+        edit_row = tk.Frame(op_lf, bg=BG)
+        edit_row.pack(fill="x", padx=8, pady=(0, 6))
+
+        tk.Label(edit_row, text="名稱：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        name_var = tk.StringVar()
+        tk.Entry(edit_row, textvariable=name_var, font=FONT_S, width=12,
+                 relief="solid", borderwidth=1).pack(side="left", padx=(0, 8))
+
+        tk.Label(edit_row, text="代號：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        code_var = tk.StringVar()
+        tk.Entry(edit_row, textvariable=code_var, font=FONT_S, width=8,
+                 relief="solid", borderwidth=1).pack(side="left", padx=(0, 8))
+
+        tk.Label(edit_row, text="（英文字串，如 K）", bg=BG, font=FONT_S, fg=GRAY
+                 ).pack(side="left", padx=(0, 12))
+
+        def _op_add():
+            n = name_var.get().strip()
+            c = code_var.get().strip().upper()
+            if not n or not c:
+                messagebox.showwarning("欄位不完整", "請填入名稱和代號", parent=dlg)
+                return
+            # 更新已存在的同名項
+            for item in op_tree.get_children():
+                if op_tree.item(item)["values"][0] == n:
+                    op_tree.item(item, values=(n, c))
+                    name_var.set(""); code_var.set("")
+                    return
+            op_tree.insert("", "end", values=(n, c))
+            name_var.set(""); code_var.set("")
+
+        def _op_del():
+            sel = op_tree.selection()
+            if sel:
+                op_tree.delete(sel[0])
+
+        def _op_select(*_):
+            sel = op_tree.selection()
+            if sel:
+                vals = op_tree.item(sel[0])["values"]
+                name_var.set(vals[0])
+                code_var.set(vals[1])
+
+        op_tree.bind("<<TreeviewSelect>>", _op_select)
+
+        tk.Button(edit_row, text="新增 / 更新", command=_op_add,
+                  bg="#117a65", fg="white", relief="flat",
+                  font=FONT_S, padx=8).pack(side="left", padx=(0, 4))
+        tk.Button(edit_row, text="刪除選取", command=_op_del,
+                  bg="#c0392b", fg="white", relief="flat",
+                  font=FONT_S, padx=8).pack(side="left")
+
         def _reset_defaults():
             for key, var in path_vars.items():
                 var.set(self._PATH_DEFAULTS[key])
@@ -1517,13 +2309,28 @@ class App(tk.Tk):
             self._config.setdefault("paths", {})
             for key, var in path_vars.items():
                 self._config["paths"][key] = var.get().strip()
+
+            # 收集人員資料
+            new_operators: list[str] = []
+            new_codes:     dict[str, str] = {}
+            for item in op_tree.get_children():
+                vals = op_tree.item(item)["values"]
+                name = str(vals[0]).strip()
+                code = str(vals[1]).strip().upper()
+                if name:
+                    new_operators.append(name)
+                    new_codes[name] = code or name[:1].upper()
+            if new_operators:
+                self._config["operators"]      = new_operators
+                self._config["operator_codes"] = new_codes
+
             _save_config(self._config)
-            messagebox.showinfo("已儲存", "路徑設定已儲存", parent=dlg)
+            messagebox.showinfo("已儲存", "設定已儲存", parent=dlg)
             dlg.destroy()
 
         bb = tk.Frame(dlg, bg=BG)
         bb.pack(fill="x", padx=16, pady=8)
-        tk.Button(bb, text="還原預設值", command=_reset_defaults,
+        tk.Button(bb, text="還原路徑預設值", command=_reset_defaults,
                   bg="#5d6d7e", fg="white", relief="flat",
                   font=FONT, padx=10).pack(side="left", padx=(0, 8))
         tk.Button(bb, text="儲存並關閉", command=_save,
@@ -1671,6 +2478,7 @@ class App(tk.Tk):
         "output_inspection": r"Z:\Mika\驗收單及改造記錄單\Quoteflow_output",
         "output_tag":        r"Z:\待維修機台資料",
         "output_label":      r"Z:\出貨單\Quoteflow_output",
+        "output_quote":      r"Z:\出貨單\Quoteflow_output\報價單",
         "schedule_file":     r"Z:\會計\5.出貨相關\出貨行程表.xlsx",
         "production_file":   r"Z:\會計\●使用表格\公司帳務\1.帳務資料\▲生產群組紀錄(新版)\生產群組紀錄2026(115年).xlsx",
         "download_cards_dir": r"Z:\出貨單\Quoteflow_output\下載卡片",

@@ -1,0 +1,58 @@
+[
+  {
+    "code": "AP-15WB",
+    "name": "AP-15WB 電動油壓升降台車（雙叉式）",
+    "spec": "載重：150KG｜面板：815×500mm｜最高：1370mm｜最低：376mm",
+    "unit": "台",
+    "price": 39000,
+    "category": "AP-1x"
+  },
+  {
+    "code": "AP-15WB(經銷)",
+    "name": "AP-15WB 電動油壓升降台車（雙叉式，經銷）",
+    "spec": "載重：150KG｜面板：815×500mm｜最高：1370mm｜最低：376mm",
+    "unit": "台",
+    "price": 37200,
+    "category": "AP-1x"
+  },
+  {
+    "code": "AP-30B",
+    "name": "AP-30B 電動油壓升降台車",
+    "spec": "載重：300KG｜面板：815×500mm｜最高：860mm｜最低：290mm",
+    "unit": "台",
+    "price": 35500,
+    "category": "AP-3x"
+  },
+  {
+    "code": "AP-30SB",
+    "name": "AP-30SB 電動油壓升降台車（雙叉式）",
+    "spec": "載重：300KG｜面板：1010×520mm｜最高：1610mm｜最低：431mm",
+    "unit": "台",
+    "price": 44000,
+    "category": "AP-3x"
+  },
+  {
+    "code": "AP-50B",
+    "name": "AP-50B 電動式油壓升降台車",
+    "spec": "載重：500KG｜面板：1010×520mm｜最高：1018mm｜最低：438mm",
+    "unit": "台",
+    "price": 38000,
+    "category": "AP-5x"
+  },
+  {
+    "code": "AP-50WB",
+    "name": "AP-50WB 電動油壓升降台車（雙叉式）",
+    "spec": "載重：500KG｜面板：1010×520mm｜最高：1600mm｜最低：438mm",
+    "unit": "台",
+    "price": 46500,
+    "category": "AP-5x"
+  },
+  {
+    "code": "AP-80B",
+    "name": "AP-80B 電動油壓升降台車",
+    "spec": "載重：800KG｜面板：1010×520mm｜最高：970mm｜最低：438mm",
+    "unit": "台",
+    "price": 41000,
+    "category": "AP-8x"
+  }
+]
