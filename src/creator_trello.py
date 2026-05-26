@@ -43,21 +43,36 @@ def _get_target_list_id(api_key: str, token: str) -> str:
     raise ValueError(f"找不到清單「{_LIST_NAME}」")
 
 
-def _parse_phones(cell_value) -> tuple[str, str]:
-    """從儲存格解析手機（10碼）與電話（9碼），回傳 (mobile, phone)。"""
+def _parse_phones(cell_value) -> tuple[str, str, str]:
+    """從儲存格解析手機、市話、分機，回傳 (mobile, phone, ext)。
+    - 手機：09 開頭、10碼
+    - 市話：0[2-8] 開頭（含區碼）
+    - 分機：# 後的數字，附屬於同一段市話（例如 04-9225-7851 #160）
+    空格不作為分隔符，避免 "04-9225-7851 #160" 被切斷。
+    """
     if not cell_value:
-        return "", ""
-    mobile, phone = "", ""
-    for part in re.split(r'[\n\r/,、 ]+', str(cell_value).strip()):
+        return "", "", ""
+    mobile, phone, ext = "", "", ""
+    for part in re.split(r'[\n\r/,、]+', str(cell_value).strip()):
         part = part.strip()
         if not part:
             continue
-        digits = re.sub(r'[^0-9]', '', part)
-        if len(digits) == 10 and not mobile:
-            mobile = part
-        elif len(digits) == 9 and not phone:
-            phone = part
-    return mobile, phone
+        # 分離分機（# 之後）
+        if '#' in part:
+            base, ext_part = part.split('#', 1)
+            base = base.strip()
+            ext_part = ext_part.strip()
+        else:
+            base = part
+            ext_part = ""
+        digits = re.sub(r'[^0-9]', '', base)
+        if re.match(r'^09', digits) and len(digits) == 10 and not mobile:
+            mobile = base
+        elif re.match(r'^0[2-8]', digits) and not phone:
+            phone = base
+            if ext_part and not ext:
+                ext = ext_part
+    return mobile, phone, ext
 
 
 def get_sheet_names(excel_path: Path) -> list[str]:
@@ -94,13 +109,14 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
         i_val = str(row[8].value or "").strip()   # 電子信箱
         j_val = str(row[9].value or "").strip()   # 統一編號
 
-        mobile, phone = _parse_phones(f_val)
+        mobile, phone, ext = _parse_phones(f_val)
+        phone_display = f"{phone}#{ext}" if ext else phone
 
         desc = (
             f"公司名：{c_val}\n"
             f"聯絡人：{d_val}\n"
             f"手機：{mobile}\n"
-            f"電話：{phone}\n"
+            f"電話：{phone_display}\n"
             f"傳真：{g_val}\n"
             f"電子信箱：{i_val}\n"
             f"統一編號：{j_val}\n"

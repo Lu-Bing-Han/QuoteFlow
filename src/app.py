@@ -257,6 +257,18 @@ class App(tk.Tk):
         cart_inner.bind("<Configure>", _on_cart_resize)
         cart_cvs.bind("<Configure>",   _on_cart_resize)
 
+        def _cart_scroll(e):
+            cart_cvs.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        def _rebind_cart_scroll(widget=None):
+            """購物車重建後遞迴綁定所有子元件。"""
+            w = widget or cart_inner
+            w.bind("<MouseWheel>", _cart_scroll)
+            for child in w.winfo_children():
+                _rebind_cart_scroll(child)
+
+        cart_cvs.bind("<MouseWheel>", _cart_scroll)
+
         # 購物車 Footer
         cf = tk.Frame(cart_panel, bg="#f0f4f8", bd=1, relief="ridge")
         cf.pack(fill="x")
@@ -269,6 +281,47 @@ class App(tk.Tk):
         cart_tot_lbl = tk.Label(cf, text="合計：—", bg="#f0f4f8",
                                  font=(FONTB[0], 10, "bold"), fg=BLUE, anchor="e")
         cart_tot_lbl.pack(fill="x", padx=10, pady=(1, 4))
+
+        # ── 運費設定 ────────────────────────────────────────
+        tk.Frame(cf, bg="#c8cfd6", height=1).pack(fill="x", padx=6)
+        ship_outer = tk.Frame(cf, bg="#f0f4f8")
+        ship_outer.pack(fill="x", padx=8, pady=(3, 0))
+
+        ship_var       = tk.BooleanVar(value=False)
+        ship_price_var = tk.StringVar(value="1500")
+        ship_promo_var = tk.BooleanVar(value=False)
+
+        ship_row1 = tk.Frame(ship_outer, bg="#f0f4f8")
+        ship_row1.pack(fill="x")
+        ship_cb = tk.Checkbutton(ship_row1, text="加入運費", variable=ship_var,
+                                  bg="#f0f4f8", font=FONT_S, fg=GRAY,
+                                  activebackground="#f0f4f8")
+        ship_cb.pack(side="left")
+        tk.Label(ship_row1, text="$", bg="#f0f4f8", font=FONT_S, fg=GRAY).pack(side="left")
+        ship_price_entry = tk.Entry(ship_row1, textvariable=ship_price_var,
+                                     width=7, font=FONT_S, state="disabled")
+        ship_price_entry.pack(side="left", padx=(0, 2))
+
+        ship_row2 = tk.Frame(ship_outer, bg="#f0f4f8")
+        ship_row2.pack(fill="x", pady=(1, 4))
+        ship_promo_cb = tk.Checkbutton(ship_row2, text="顯示免運優惠文字",
+                                        variable=ship_promo_var,
+                                        bg="#f0f4f8", font=FONT_S, fg="#c0392b",
+                                        activebackground="#f0f4f8", state="disabled")
+        ship_promo_cb.pack(side="left")
+
+        def _on_ship_toggle(*_):
+            state = "normal" if ship_var.get() else "disabled"
+            ship_price_entry.config(state=state)
+            ship_promo_cb.config(state=state)
+            if not ship_var.get():
+                ship_promo_var.set(False)
+            _update_cart_totals()
+
+        ship_var.trace_add("write", _on_ship_toggle)
+        ship_price_var.trace_add("write", lambda *_: _update_cart_totals())
+        # ────────────────────────────────────────────────────
+
         checkout_btn = tk.Button(cf, text="確認報價內容 →", state="disabled",
                                   bg=BLUE, fg="white", relief="flat",
                                   font=FONT_S, pady=5)
@@ -340,14 +393,22 @@ class App(tk.Tk):
                 sub = item["qty"] * item["price"]
                 tk.Label(if_f, text=f"= {_fmt(sub)}", bg=BG, fg=GRAY,
                          font=FONT_S, anchor="e").pack(fill="x")
+            # 購物車重建後綁滾輪
+            _rebind_cart_scroll()
             _update_cart_totals()
 
         def _update_cart_totals():
             items = [v for v in _cart.values() if v["qty"] > 0]
             sub   = sum(v["qty"] * v["price"] for v in items)
-            tax   = round(sub * 0.05)
-            tot   = sub + tax
-            cart_sub_lbl.config(text=f"小計：{_fmt(sub)}")
+            freight = 0
+            if ship_var.get():
+                try:
+                    freight = float(ship_price_var.get().replace(",", ""))
+                except ValueError:
+                    pass
+            tax   = round((sub + freight) * 0.05)
+            tot   = sub + freight + tax
+            cart_sub_lbl.config(text=f"小計：{_fmt(sub)}" + (f" + 運費 {_fmt(freight)}" if freight else ""))
             cart_tax_lbl.config(text=f"營業稅 5%：{_fmt(tax)}")
             cart_tot_lbl.config(text=f"合計：{_fmt(tot)}")
             checkout_btn.config(state="normal" if items else "disabled")
@@ -467,6 +528,22 @@ class App(tk.Tk):
         card_tree.pack(side="left", fill="both", expand=True)
         ct_vsb.pack(side="right", fill="y")
 
+        # Trello 卡片連結
+        _card_url: list[str] = [""]
+        trello_link_row = tk.Frame(p1, bg=BG)
+        trello_link_row.pack(fill="x", padx=10, pady=(0, 2))
+        trello_link_lbl = tk.Label(
+            trello_link_row, text="", bg=BG, fg="#1a5276",
+            font=(FONT_S[0], 9, "underline"), cursor="hand2", anchor="w")
+        trello_link_lbl.pack(side="left")
+
+        def _open_trello_card(e=None):
+            import webbrowser as _wb
+            if _card_url[0]:
+                _wb.open(_card_url[0])
+
+        trello_link_lbl.bind("<Button-1>", _open_trello_card)
+
         # 報價設定列（放在客戶資料上方，日曆才不會被遮住）
         cfg_f = tk.LabelFrame(p1, text="報價設定", bg=BG, font=FONT_S)
         cfg_f.pack(fill="x", padx=10, pady=(4, 2))
@@ -557,6 +634,15 @@ class App(tk.Tk):
             _card[0] = card
             desc = parse_card_desc(card.get("desc", ""))
 
+            # 更新 Trello 連結
+            url = card.get("shortUrl") or card.get("url", "")
+            _card_url[0] = url
+            if url:
+                name_short = card["name"][:40] + ("…" if len(card["name"]) > 40 else "")
+                trello_link_lbl.config(text=f"🔗 {name_short}")
+            else:
+                trello_link_lbl.config(text="")
+
             def _g(*keys):
                 for k in keys:
                     v = desc.get(k)
@@ -589,9 +675,37 @@ class App(tk.Tk):
         # ════════════════════════════════════════════════════
         p2 = tk.Frame(step_content, bg=BG)
 
-        # 分類 Tabs
-        cat_bar = tk.Frame(p2, bg=BG)
-        cat_bar.pack(fill="x", padx=10, pady=(8, 4))
+        # 分類 Tabs（可橫向捲動，支援 37 個系列）
+        cat_bar_outer = tk.Frame(p2, bg=BG, height=48)
+        cat_bar_outer.pack(fill="x", padx=10, pady=(8, 0))
+        cat_bar_outer.pack_propagate(False)
+
+        cat_cvs = tk.Canvas(cat_bar_outer, bg=BG, highlightthickness=0, height=48)
+        cat_hsb = ttk.Scrollbar(cat_bar_outer, orient="horizontal", command=cat_cvs.xview)
+        cat_cvs.configure(xscrollcommand=cat_hsb.set)
+        cat_hsb.pack(side="bottom", fill="x")
+        cat_cvs.pack(side="top", fill="both", expand=True)
+
+        cat_bar  = tk.Frame(cat_cvs, bg=BG)
+        _cat_win = cat_cvs.create_window((0, 0), window=cat_bar, anchor="nw")
+        cat_bar.bind("<Configure>",
+                     lambda e: cat_cvs.configure(scrollregion=cat_cvs.bbox("all")))
+
+        # 滑鼠滾輪捲動（Windows 需綁到所有子元件）
+        def _cat_scroll(e):
+            cat_cvs.xview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        def _prod_scroll(e):
+            prod_cvs.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        def _bind_scroll(widget, fn):
+            widget.bind("<MouseWheel>", fn)
+            for child in widget.winfo_children():
+                _bind_scroll(child, fn)
+
+        cat_cvs.bind("<MouseWheel>", _cat_scroll)
+        cat_bar.bind("<MouseWheel>",  _cat_scroll)
+
         _cat_btns: dict[str, tk.Button] = {}
 
         def _set_cat(cat: str):
@@ -606,6 +720,7 @@ class App(tk.Tk):
                           bg="#dee2e6", fg="#333", padx=8, pady=3,
                           command=lambda c=cat: _set_cat(c))
             b.pack(side="left", padx=(0, 4))
+            b.bind("<MouseWheel>", _cat_scroll)   # 按鈕本身也綁
             _cat_btns[cat] = b
         # _set_cat(CATS[0]) 移到 _render_products 定義之後執行
 
@@ -678,6 +793,11 @@ class App(tk.Tk):
                           bg=add_bg, fg="white", relief="flat",
                           font=(FONTB[0], 12), width=2, pady=0
                           ).pack(side="right")
+
+            # 產品卡每次重建後，把所有子元件都綁上垂直滾輪
+            _bind_scroll(prod_inner, _prod_scroll)
+
+        prod_cvs.bind("<MouseWheel>", _prod_scroll)
 
         # 初始化：設定第一個分類並渲染
         if CATS:
@@ -766,10 +886,22 @@ class App(tk.Tk):
                     f"${int(v['price']):,}",
                     f"${int(s):,}",
                 ))
-            tax = round(sub * 0.05)
-            p3_sub_lbl.config(text=f"小計：{_fmt(sub)}")
+            freight = 0
+            if ship_var.get():
+                try:
+                    freight = float(ship_price_var.get().replace(",", ""))
+                except ValueError:
+                    freight = 0
+                if freight:
+                    promo_txt = "（含免運優惠）" if ship_promo_var.get() else ""
+                    conf_tree.insert("", "end", values=(
+                        "N/A", f"一次性運費{promo_txt}", "1 趟",
+                        f"${int(freight):,}", f"${int(freight):,}",
+                    ))
+            tax = round((sub + freight) * 0.05)
+            p3_sub_lbl.config(text=f"小計：{_fmt(sub)}" + (f" + 運費 {_fmt(freight)}" if freight else ""))
             p3_tax_lbl.config(text=f"營業稅 5%：{_fmt(tax)}")
-            p3_tot_lbl.config(text=f"應收總金額：{_fmt(sub+tax)}")
+            p3_tot_lbl.config(text=f"應收總金額：{_fmt(sub + freight + tax)}")
             _p3_cust_lbls["company"].config(    text=_customer.get("company", "—"))
             _p3_cust_lbls["contact"].config(    text=_customer.get("contact", "—"))
             _p3_cust_lbls["_quote_no"].config(  text=quote_no_var.get())
@@ -799,10 +931,22 @@ class App(tk.Tk):
 
             p3_out_lbl.config(text="生成中…", fg=GRAY)
             parent.update_idletasks()
+            shipping_info = None
+            if ship_var.get():
+                try:
+                    sp = float(ship_price_var.get().replace(",", ""))
+                except ValueError:
+                    sp = 1500
+                shipping_info = {
+                    "enabled": True,
+                    "price":   sp,
+                    "promo":   ship_promo_var.get(),
+                }
             try:
                 out_path = generate_quote_from_cart(
                     _customer, cart_items, tpl_path, out_dir, quote_no, q_date,
-                    operator=op_var.get().strip())
+                    operator=op_var.get().strip(),
+                    shipping=shipping_info)
                 p3_out_lbl.config(text=f"✔  已生成：{out_path}", fg=GREEN)
                 if messagebox.askyesno("完成",
                         f"報價單已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
@@ -840,11 +984,20 @@ class App(tk.Tk):
                     panel.pack(fill="both", expand=True)
                 else:
                     panel.pack_forget()
+            # 第 1 步不顯示購物車
+            if n == 1:
+                right_border.pack_forget()
+                cart_panel.pack_forget()
+            else:
+                right_border.pack(side="right", fill="y")
+                cart_panel.pack(side="right", fill="y")
             if n == 3:
                 _build_confirm()
 
         checkout_btn.config(command=lambda: _go_step(3))
         _render_cart()
+        right_border.pack_forget()
+        cart_panel.pack_forget()
         _go_step(1)
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
@@ -2575,7 +2728,7 @@ class App(tk.Tk):
             "operator":       self._operator_var.get(),
             "invoice_choice": self._invoice_var.get(),
         }
-        try:
+        try: 
             result = generate_fix(self._parsed_data, extra, output_dir=self._OUT_SHIPPING)
             paths  = result if isinstance(result, list) else [result]
             msg = "\n".join(str(p) for p in paths)

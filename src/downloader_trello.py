@@ -47,7 +47,7 @@ def get_list_cards(list_id: str, api_key: str, token: str) -> list[dict]:
         params={
             **_auth(api_key, token),
             "attachments": "true",
-            "fields": "name,desc,labels,attachments",
+            "fields": "name,desc,labels,attachments,shortUrl",
         },
         timeout=15,
     )

@@ -5,7 +5,7 @@
     "spec": "載重：150KG｜面板：815×500mm｜最高：1370mm｜最低：376mm",
     "unit": "台",
     "price": 39000,
-    "category": "AP-1x"
+    "category": "APB"
   },
   {
     "code": "AP-15WB(經銷)",
@@ -13,7 +13,7 @@
     "spec": "載重：150KG｜面板：815×500mm｜最高：1370mm｜最低：376mm",
     "unit": "台",
     "price": 37200,
-    "category": "AP-1x"
+    "category": "APB"
   },
   {
     "code": "AP-30B",
@@ -21,7 +21,7 @@
     "spec": "載重：300KG｜面板：815×500mm｜最高：860mm｜最低：290mm",
     "unit": "台",
     "price": 35500,
-    "category": "AP-3x"
+    "category": "APB"
   },
   {
     "code": "AP-30SB",
@@ -29,7 +29,7 @@
     "spec": "載重：300KG｜面板：1010×520mm｜最高：1610mm｜最低：431mm",
     "unit": "台",
     "price": 44000,
-    "category": "AP-3x"
+    "category": "APB"
   },
   {
     "code": "AP-50B",
@@ -37,7 +37,7 @@
     "spec": "載重：500KG｜面板：1010×520mm｜最高：1018mm｜最低：438mm",
     "unit": "台",
     "price": 38000,
-    "category": "AP-5x"
+    "category": "APB"
   },
   {
     "code": "AP-50WB",
@@ -45,7 +45,7 @@
     "spec": "載重：500KG｜面板：1010×520mm｜最高：1600mm｜最低：438mm",
     "unit": "台",
     "price": 46500,
-    "category": "AP-5x"
+    "category": "APB"
   },
   {
     "code": "AP-80B",
@@ -53,6 +53,1742 @@
     "spec": "載重：800KG｜面板：1010×520mm｜最高：970mm｜最低：438mm",
     "unit": "台",
     "price": 41000,
-    "category": "AP-8x"
+    "category": "APB"
+  },
+  {
+    "code": "BMT-20LL",
+    "name": "BMT-20M油壓拖板車(1220×685)",
+    "spec": "台灣製造｜載重：2000KG｜牙叉長：1220mm｜牙叉寬：685mm｜最低：80mm｜最高：200mm",
+    "unit": "台",
+    "price": 0,
+    "category": "BMT"
+  },
+  {
+    "code": "BMT-20LLL",
+    "name": "BMT-20LLL油壓拖板車",
+    "spec": "台灣製造｜載重：2000KG｜牙叉長：1220mm｜牙叉寬：685mm｜最低：65mm｜最高：185mm",
+    "unit": "台",
+    "price": 0,
+    "category": "BMT"
+  },
+  {
+    "code": "BMT-20M",
+    "name": "BMT-20M油壓拖板車(1070×520)",
+    "spec": "台灣製造｜載重：2000KG｜牙叉長：1070mm｜牙叉寬：520mm｜最低：80mm｜最高：200mm",
+    "unit": "台",
+    "price": 0,
+    "category": "BMT"
+  },
+  {
+    "code": "BMT-20SS",
+    "name": "BMT-20SS油壓拖板車",
+    "spec": "台灣製造｜載重：2000KG｜牙叉長：1220mm｜牙叉寬：685mm｜最低：65mm｜最高：185mm",
+    "unit": "台",
+    "price": 0,
+    "category": "BMT"
+  },
+  {
+    "code": "BMT-25LL",
+    "name": "BMT-25LL油壓拖板車",
+    "spec": "(RBTⅡ系列)｜承重：2500KG｜牙叉長：1220mm｜牙叉寬：685mm｜最低：80mm｜最高：200mm",
+    "unit": "台",
+    "price": 9000,
+    "category": "BMT"
+  },
+  {
+    "code": "BMT-30LL",
+    "name": "BMT-30LL油壓拖板車",
+    "spec": "台灣製造｜載重：3000KG｜牙叉長：1220mm｜牙叉寬：680mm｜最低：80mm｜最高：200mm",
+    "unit": "台",
+    "price": 0,
+    "category": "BMT"
+  },
+  {
+    "code": "BST-80",
+    "name": "BST-80吊捍機(半電動)",
+    "spec": "載重：80KG｜吊鉤最低：640mm｜吊鉤最高：1740mm｜吊臂滑動：900mm",
+    "unit": "台",
+    "price": 52500,
+    "category": "BST"
+  },
+  {
+    "code": "BST-200",
+    "name": "BST-200吊捍機(半電動)",
+    "spec": "載重：200KG｜吊鉤最低：640mm｜吊鉤最高：1740mm｜吊臂滑動：900mm",
+    "unit": "台",
+    "price": 57000,
+    "category": "BST"
+  },
+  {
+    "code": "BXT-100",
+    "name": "BXT-100油壓台車(單叉式)",
+    "spec": "台灣製造｜載重：1000KG｜台面：550×1000mm｜最低：375mm｜最高：1010mm",
+    "unit": "台",
+    "price": 21500,
+    "category": "BXT"
+  },
+  {
+    "code": "BXT-100B",
+    "name": "BXT-100B電動油壓台車(單叉式)",
+    "spec": "台灣製造｜載重：1000KG｜台面：550×1000mm｜最低：380mm｜最高：1010mm",
+    "unit": "台",
+    "price": 43500,
+    "category": "BXT"
+  },
+  {
+    "code": "EZ Lifter",
+    "name": "EZ Lifter自動升降疊棧機",
+    "spec": "最大載重：1814KG｜最低高度：267mm｜最高高度：775mm｜氣壓需求：4.1 bar",
+    "unit": "台",
+    "price": 145000,
+    "category": "EZ Lifter"
+  },
+  {
+    "code": "EZO-25E",
+    "name": "EZO-25E垂直式電動疊棧機",
+    "spec": "載重：1130KG｜最低高度：45mm｜最高高度：762mm｜斜坡：1組",
+    "unit": "台",
+    "price": 290000,
+    "category": "EZ Lifter"
+  },
+  {
+    "code": "EZO-25E-3S",
+    "name": "EZO-25E-3S垂直式電動疊棧機",
+    "spec": "載重：1130KG｜最低高度：45mm｜最高高度：762mm｜斜坡：3組",
+    "unit": "台",
+    "price": 305000,
+    "category": "EZ Lifter"
+  },
+  {
+    "code": "2HT101211",
+    "name": "2HT101211重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：1200×1150mm｜最低：255mm｜最高：1655mm",
+    "unit": "台",
+    "price": 89000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT101214",
+    "name": "2HT101214重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：1200×1400mm｜最低：306mm｜最高：2106mm",
+    "unit": "台",
+    "price": 96000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT101218",
+    "name": "2HT101218重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：1200×1850mm｜最低：356mm｜最高：2756mm",
+    "unit": "台",
+    "price": 109000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT106010",
+    "name": "2HT106010重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：600×1000mm｜最低：255mm｜最高：1505mm",
+    "unit": "台",
+    "price": 81000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT106011",
+    "name": "2HT106011重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：600×1150mm｜最低：255mm｜最高：1655mm",
+    "unit": "台",
+    "price": 83000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT106014",
+    "name": "2HT106014重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：600×1400mm｜最低：306mm｜最高：2106mm",
+    "unit": "台",
+    "price": 89000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT106018",
+    "name": "2HT106018重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：600×1850mm｜最低：356mm｜最高：2756mm",
+    "unit": "台",
+    "price": 106000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT106078",
+    "name": "2HT106078重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：600×780mm｜最低：255mm｜最高：1155mm",
+    "unit": "台",
+    "price": 97000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT108510",
+    "name": "2HT108510重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：850×1000mm｜最低：255mm｜最高：1505mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT108511",
+    "name": "2HT108511重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：850×1150mm｜最低：255mm｜最高：1655mm",
+    "unit": "台",
+    "price": 88000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT108514",
+    "name": "2HT108514重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：850×1400mm｜最低：306mm｜最高：2106mm",
+    "unit": "台",
+    "price": 91000,
+    "category": "HT"
+  },
+  {
+    "code": "2HT108518",
+    "name": "2HT108518重量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：1000KG｜面板：850×1850mm｜最低：356mm｜最高：2756mm",
+    "unit": "台",
+    "price": 109000,
+    "category": "HT"
+  },
+  {
+    "code": "HT10410",
+    "name": "HT10410重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜台面：400×1000mm｜最低：115mm｜最高：755mm",
+    "unit": "台",
+    "price": 59000,
+    "category": "HT"
+  },
+  {
+    "code": "HT10413",
+    "name": "HT10413重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：400×1340mm｜最低：155mm｜最高：1000mm",
+    "unit": "台",
+    "price": 57000,
+    "category": "HT"
+  },
+  {
+    "code": "HT10415",
+    "name": "HT10415重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：400×1500mm｜最低：205mm｜最高：1155mm",
+    "unit": "台",
+    "price": 66000,
+    "category": "HT"
+  },
+  {
+    "code": "HT101013",
+    "name": "HT101013重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：1000×1340mm｜最低：155mm｜最高：1000mm",
+    "unit": "台",
+    "price": 71000,
+    "category": "HT"
+  },
+  {
+    "code": "HT101015",
+    "name": "HT101015電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：1000×1500mm｜最低：205mm｜最高：1155mm",
+    "unit": "台",
+    "price": 76000,
+    "category": "HT"
+  },
+  {
+    "code": "HT101020",
+    "name": "HT101020重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：1000×2000mm｜最低：205mm｜最高：1510mm",
+    "unit": "台",
+    "price": 81000,
+    "category": "HT"
+  },
+  {
+    "code": "HT101224",
+    "name": "HT101224重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：1200×2400mm｜最低：207mm｜最高：1512mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "HT"
+  },
+  {
+    "code": "HT106410",
+    "name": "HT106410電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：640×1000mm｜最低：155mm｜最高：755mm",
+    "unit": "台",
+    "price": 61000,
+    "category": "HT"
+  },
+  {
+    "code": "HT106413",
+    "name": "HT106413電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：640×1340mm｜最低：155mm｜最高：1000mm",
+    "unit": "台",
+    "price": 66000,
+    "category": "HT"
+  },
+  {
+    "code": "HT106415",
+    "name": "HT106415重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：640×1500mm｜最低：205mm｜最高：1155mm",
+    "unit": "台",
+    "price": 68000,
+    "category": "HT"
+  },
+  {
+    "code": "HT106418",
+    "name": "HT106418重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：640×1800mm｜最低：205mm｜最高：1510mm",
+    "unit": "台",
+    "price": 71000,
+    "category": "HT"
+  },
+  {
+    "code": "HT106485",
+    "name": "HT106485電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：640×850mm｜最低：155mm｜最高：555mm",
+    "unit": "台",
+    "price": 59000,
+    "category": "HT"
+  },
+  {
+    "code": "HT107810",
+    "name": "HT107810重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：780×1000mm｜最低：155mm｜最高：755mm",
+    "unit": "台",
+    "price": 68200,
+    "category": "HT"
+  },
+  {
+    "code": "HT107813",
+    "name": "HT107813重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：780×1340mm｜最低：155mm｜最高：1000mm",
+    "unit": "台",
+    "price": 66000,
+    "category": "HT"
+  },
+  {
+    "code": "HT107815",
+    "name": "HT107815重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：780×1500mm｜最低：205mm｜最高：1155mm",
+    "unit": "台",
+    "price": 68000,
+    "category": "HT"
+  },
+  {
+    "code": "HT107818",
+    "name": "HT107818重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：780×1800mm｜最低：205mm｜最高：1510mm",
+    "unit": "台",
+    "price": 71000,
+    "category": "HT"
+  },
+  {
+    "code": "HT107885",
+    "name": "HT107885重量型電動油壓升降平台",
+    "spec": "載重：1000KG｜面板：780×850mm｜最低：155mm｜最高：555mm",
+    "unit": "台",
+    "price": 59000,
+    "category": "HT"
+  },
+  {
+    "code": "HT201013",
+    "name": "HT201013重量型電動油壓升降平台",
+    "spec": "載重：2000KG｜面板：1000×1300mm｜最低：200mm｜最高：1000mm",
+    "unit": "台",
+    "price": 81000,
+    "category": "HT"
+  },
+  {
+    "code": "HT201015",
+    "name": "HT201015重量型電動油壓升降平台",
+    "spec": "載重：2000KG｜面板：1000×1500mm｜最低：215mm｜最高：1215mm",
+    "unit": "台",
+    "price": 83000,
+    "category": "HT"
+  },
+  {
+    "code": "HT201020",
+    "name": "HT201020重量型電動油壓升降平台",
+    "spec": "載重：2000KG｜面板：1000×2000mm｜最低：250mm｜最高：1500mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "HT"
+  },
+  {
+    "code": "HT201224",
+    "name": "HT201224重量型電動油壓升降平台",
+    "spec": "載重：2000KG｜面板：1200×2400mm｜最低：252mm｜最高：1502mm",
+    "unit": "台",
+    "price": 93000,
+    "category": "HT"
+  },
+  {
+    "code": "HT207013",
+    "name": "HT207013重量型電動油壓升降平台",
+    "spec": "載重：2000KG｜面板：700×1300mm｜最低：200mm｜最高：1000mm",
+    "unit": "台",
+    "price": 79000,
+    "category": "HT"
+  },
+  {
+    "code": "HT207015",
+    "name": "HT207015重量型電動油壓升降平台",
+    "spec": "載重：2000KG｜面板：700×1500mm｜最低：215mm｜最高：1215mm",
+    "unit": "台",
+    "price": 83000,
+    "category": "HT"
+  },
+  {
+    "code": "HT301013",
+    "name": "HT301013重量型電動油壓升降平台",
+    "spec": "載重：3000KG｜面板：1000×1300mm｜最低：235mm｜最高：1035mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "HT"
+  },
+  {
+    "code": "HT301015",
+    "name": "HT301015重量型電動油壓升降平台",
+    "spec": "載重：3000KG｜面板：1000×1500mm｜最低：245mm｜最高：1245mm",
+    "unit": "台",
+    "price": 91000,
+    "category": "HT"
+  },
+  {
+    "code": "HT301020",
+    "name": "HT301020電動油壓升降平台",
+    "spec": "載重：3000KG｜面板：1000×1200mm｜最低：280mm｜最高：1530mm",
+    "unit": "台",
+    "price": 96000,
+    "category": "HT"
+  },
+  {
+    "code": "HT301224",
+    "name": "HT301224重量型電動油壓升降平台",
+    "spec": "載重：3000KG｜面板：1200×2400mm｜最低：280mm｜最高：1530mm",
+    "unit": "台",
+    "price": 99000,
+    "category": "HT"
+  },
+  {
+    "code": "HT307013",
+    "name": "HT307013重量型電動油壓升降平台",
+    "spec": "載重：3000KG｜面板：700×1300mm｜最低：235mm｜最高：1035mm",
+    "unit": "台",
+    "price": 83000,
+    "category": "HT"
+  },
+  {
+    "code": "HT307015",
+    "name": "HT307015重量型電動油壓升降平台",
+    "spec": "載重：3000KG｜面板：700×1500mm｜最低：245mm｜最高：1245mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "HT"
+  },
+  {
+    "code": "AM15SS-L",
+    "name": "AM15SS-L低床拖板車",
+    "spec": "載重 : 1500KG｜牙叉寬 : 520mm｜牙叉長 : 810mm｜最高高度 : 165mm",
+    "unit": "台",
+    "price": 20500,
+    "category": "AM"
+  },
+  {
+    "code": "AM20C",
+    "name": "AM20C油壓拖板車",
+    "spec": "載重：2000KG｜牙叉長度：1070mm｜牙叉寬度： 685mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 18000,
+    "category": "AM"
+  },
+  {
+    "code": "AM20L",
+    "name": "AM20L油壓拖板車",
+    "spec": "載重：2000KG｜牙叉長度：1150mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 18500,
+    "category": "AM"
+  },
+  {
+    "code": "AM20LL",
+    "name": "AM20LL油壓拖板車",
+    "spec": "載重：2000KG｜牙叉長度：1220mm｜牙叉寬度：685mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 18000,
+    "category": "AM"
+  },
+  {
+    "code": "AM20M",
+    "name": "AM20M油壓拖板車",
+    "spec": "載重：2000KG｜牙叉長度：1070mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 18500,
+    "category": "AM"
+  },
+  {
+    "code": "AM20S",
+    "name": "AM20S油壓拖板車",
+    "spec": "載重：2000KG｜牙叉長度：980mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 18000,
+    "category": "AM"
+  },
+  {
+    "code": "AM20SS",
+    "name": "AM20SS油壓拖板車",
+    "spec": "載重：2000KG｜牙叉長度：810mm｜牙叉寬度：520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 18000,
+    "category": "AM"
+  },
+  {
+    "code": "AM25",
+    "name": "AM25油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1150mm｜牙叉寬度： 685mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25C",
+    "name": "AM25C油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1070mm｜牙叉寬度： 685mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25L",
+    "name": "AM25L油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1150mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25LL",
+    "name": "AM25LL 油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1220mm｜牙叉寬度： 685mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25LLL",
+    "name": "AM25LLL油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1220mm｜牙叉寬度： 685mm｜牙叉最高高度：165mm",
+    "unit": "台",
+    "price": 20500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25M",
+    "name": "AM25M油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1070mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25ML",
+    "name": "AM25ML油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：1070mm｜牙叉寬度： 520mm｜牙叉最高高度：165mm",
+    "unit": "台",
+    "price": 20500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25S",
+    "name": "AM25S油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：980mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM25SS",
+    "name": "AM25SS油壓拖板車",
+    "spec": "載重：2500KG｜牙叉長度：810mm｜牙叉寬度： 520mm｜牙叉最高高度：200mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "AM"
+  },
+  {
+    "code": "AM30LL",
+    "name": "AM30LL油壓拖板車",
+    "spec": "載重：3000KG｜牙叉長度：1220mm｜牙叉寬度：685mm｜牙叉最高高度：203mm",
+    "unit": "台",
+    "price": 29500,
+    "category": "AM"
+  },
+  {
+    "code": "AM30M",
+    "name": "AM30M油壓拖板車",
+    "spec": "載重：3000KG｜牙叉長度：1070mm｜牙叉寬度： 520mm｜牙叉最高高度：203mm",
+    "unit": "台",
+    "price": 29500,
+    "category": "AM"
+  },
+  {
+    "code": "AM40LL",
+    "name": "AM40LL油壓拖板車",
+    "spec": "載重：4000KG｜牙叉長度：1220mm｜牙叉寬度：685mm｜牙叉最高高度：203mm",
+    "unit": "台",
+    "price": 116715,
+    "category": "AM"
+  },
+  {
+    "code": "AM50L4",
+    "name": "AM50L4油壓拖板車",
+    "spec": "載重：5000KG｜牙叉長度：1500mm｜牙叉寬度：685mm｜牙叉最高高度：205mm",
+    "unit": "台",
+    "price": 116715,
+    "category": "AM"
+  },
+  {
+    "code": "APL05",
+    "name": "APL05彈簧高度定位台車",
+    "spec": "載重設定範圍：10~50KG｜最大載重：50KG｜面板尺寸：450x700mm｜最低高度：262mm",
+    "unit": "台",
+    "price": 8700,
+    "category": "APL"
+  },
+  {
+    "code": "APL08",
+    "name": "APL08彈簧高度定位台車",
+    "spec": "載重設定範圍：20~80KG｜最大載重：80KG｜面板尺寸：450x700mm｜最低高度：262mm",
+    "unit": "台",
+    "price": 9400,
+    "category": "APL"
+  },
+  {
+    "code": "APL10",
+    "name": "APL10彈簧高度定位台車",
+    "spec": "載重設定範圍：30~100KG｜最大載重：100KG｜面板尺寸：450x700mm｜最低高度：262mm",
+    "unit": "台",
+    "price": 9800,
+    "category": "APL"
+  },
+  {
+    "code": "APL10L",
+    "name": "APL10L 彈簧高度定位台車",
+    "spec": "載重設定範圍：40~100KG｜最大載重：100KG｜面板尺寸：500x 813mm｜最低高度 : 352mm",
+    "unit": "台",
+    "price": 14400,
+    "category": "APL"
+  },
+  {
+    "code": "APL21L",
+    "name": "APL21L彈簧高度定位台車",
+    "spec": "載重設定範圍：55~210KG｜最大載重：210KG｜面板尺寸：518x1010mm｜最低高度 : 374mm",
+    "unit": "台",
+    "price": 18100,
+    "category": "APL"
+  },
+  {
+    "code": "APL21",
+    "name": "APL21 彈簧高度定位台車",
+    "spec": "載重設定範圍：80~210KG｜最大載重：210KG｜面板尺寸：500x813mm｜最低高度 : 352mm",
+    "unit": "台",
+    "price": 15900,
+    "category": "APL"
+  },
+  {
+    "code": "APL40",
+    "name": "APL40彈簧高度定位台車",
+    "spec": "載重設定範圍：100~400KG｜最大載重：400KG｜面板尺寸：518x1010mm｜最低高度 : 374mm",
+    "unit": "台",
+    "price": 21000,
+    "category": "APL"
+  },
+  {
+    "code": "APL60",
+    "name": "APL60彈簧高度定位台車",
+    "spec": "載重設定範圍：220~600KG｜最大載重：600KG｜面板尺寸：518x1010mm｜最低高度 : 394mm",
+    "unit": "台",
+    "price": 24000,
+    "category": "APL"
+  },
+  {
+    "code": "APS-10",
+    "name": "APS-10不銹鋼油壓升降台車",
+    "spec": "載重： 100KG｜面板尺寸：700x450mm｜最高高度：750mm｜最低高度：213mm",
+    "unit": "台",
+    "price": 42500,
+    "category": "APS"
+  },
+  {
+    "code": "APS-20",
+    "name": "APS-20不銹鋼油壓升降台車",
+    "spec": "載重： 200KG｜面板尺寸：815x500mm｜最高高度：880mm｜最低高度：288mm",
+    "unit": "台",
+    "price": 55000,
+    "category": "APS"
+  },
+  {
+    "code": "APS-50",
+    "name": "APS-50不銹鋼油壓升降台車",
+    "spec": "載重：500KG｜面板尺寸：1010x520mm｜最高高度：1020mm｜最低高度：438mm",
+    "unit": "台",
+    "price": 85700,
+    "category": "APS"
+  },
+  {
+    "code": "APT15F",
+    "name": "APT15F全電動拖板車",
+    "spec": "載重：1500KG｜牙叉長度 : 1150mm｜牙叉外寬 : 685mm｜單支牙叉寬：160mm",
+    "unit": "台",
+    "price": 43500,
+    "category": "APT"
+  },
+  {
+    "code": "APT15L",
+    "name": "APT15L全電動拖板車",
+    "spec": "載重：1500KG｜牙叉長度 : 1150mm｜牙叉外寬 : 520mm｜單支牙叉寬：160mm",
+    "unit": "台",
+    "price": 43500,
+    "category": "APT"
+  },
+  {
+    "code": "APT15LL",
+    "name": "APT15LL全電動拖板車",
+    "spec": "載重：1500KG｜牙叉長度：1220mm｜牙叉外寬 : 685mm｜單支牙叉寬：160mm",
+    "unit": "台",
+    "price": 43500,
+    "category": "APT"
+  },
+  {
+    "code": "AP-15",
+    "name": "AP-15踏舉式油壓升降台車",
+    "spec": "載重：150KG｜面板尺寸：700x450mm｜最高高度：750mm｜最低高度：213mm",
+    "unit": "台",
+    "price": 8500,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP15W",
+    "name": "AP15W踏舉式油壓升降台車(雙叉式)",
+    "spec": "載重：150KG｜面板尺寸：815x500mm｜最高高度：1350mm｜最低高度：380mm",
+    "unit": "台",
+    "price": 16000,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP15W+進口地(經銷)",
+    "name": "AP15W踏舉式油壓升降台車(雙叉式)",
+    "spec": "載重：150KG｜面板尺寸：815x500mm｜最高高度：1350mm｜最低高度：380mm",
+    "unit": "台",
+    "price": 14200,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP-30",
+    "name": "AP-30踏舉式油壓升降台車",
+    "spec": "載重：300KG｜面板尺寸：815x500mm｜最高高度：880mm｜最低高度：288mm",
+    "unit": "台",
+    "price": 10800,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP-30SW",
+    "name": "AP-30SW踏舉式油壓升降台車(雙叉式)",
+    "spec": "載重：300KG｜面板尺寸：815x500mm｜最高高度：1350mm｜最低高度：380mm",
+    "unit": "台",
+    "price": 17200,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP30W",
+    "name": "AP30W踏舉式油壓升降台車(雙叉式)",
+    "spec": "載重：300KG｜面板尺寸：1010x520mm｜最高高度：1600mm｜最低高度：433mm",
+    "unit": "台",
+    "price": 21200,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP-50",
+    "name": "AP-50踏舉式油壓升降台車",
+    "spec": "載重：500KG｜面板尺寸：1010x520mm｜最高高度：1020mm｜最低高度：438mm",
+    "unit": "台",
+    "price": 17200,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP-50SW",
+    "name": "AP50SW踏舉式油壓升降台車(雙叉式)",
+    "spec": "載重：500KG｜面板尺寸：650x460mm｜最高高度：1020mm｜最低高度：418mm",
+    "unit": "台",
+    "price": 19000,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP-50W",
+    "name": "AP-50W踏舉式油壓升降台車(雙叉式)",
+    "spec": "載重 :  500KG｜面板 :  1010x520mm｜最高高度 : 1600mm｜最低高度 : 433mm",
+    "unit": "台",
+    "price": 22200,
+    "category": "AP油壓"
+  },
+  {
+    "code": "AP-80",
+    "name": "AP-80踏舉式油壓升降台車",
+    "spec": "載重：800KG｜面板尺寸：1010x520mm｜最高高度：1020mm｜最低高度：438mm",
+    "unit": "台",
+    "price": 17200,
+    "category": "AP油壓"
+  },
+  {
+    "code": "APXH-200",
+    "name": "APXH-200台車",
+    "spec": "載重：200KG｜台面尺寸： 700x500mm｜台面最高高度 : 210mm｜台面最低高度 : 160mm",
+    "unit": "台",
+    "price": 0,
+    "category": "AP油壓"
+  },
+  {
+    "code": "APXH-500",
+    "name": "APXH-500台車",
+    "spec": "載重：500KG｜台面尺寸： 800x500mm｜台面最高高度 : 210mm｜台面最低高度 : 160mm",
+    "unit": "台",
+    "price": 48000,
+    "category": "AP油壓"
+  },
+  {
+    "code": "KGM20F",
+    "name": "KGM20F 牙叉式堆高機",
+    "spec": "載重：200KG｜牙叉最低高度：95mm｜牙叉最高高度：750mm",
+    "unit": "台",
+    "price": 40000,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM20HF",
+    "name": "KGM20HF牙叉式堆高機",
+    "spec": "載重：200KG｜牙叉最低高度：95mm｜牙叉最高高度：1120mm",
+    "unit": "台",
+    "price": 43000,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM25",
+    "name": "KGM25 台面式堆高機",
+    "spec": "載重：250KG｜面板尺寸：540x600mm｜面板最低高度 : 150mm",
+    "unit": "台",
+    "price": 37000,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM25H",
+    "name": "KGM25H 台面式堆高機",
+    "spec": "載重：250KG｜面板尺寸：540x600mm｜面板最低高度：150mm",
+    "unit": "台",
+    "price": 39000,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM40F",
+    "name": "KGM40F 牙叉式堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：95mm｜牙叉最高高度：750mm",
+    "unit": "台",
+    "price": 46300,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM40HF",
+    "name": "KGM40HF牙叉式堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：95mm｜牙叉最高高度：1090mm",
+    "unit": "台",
+    "price": 48000,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM45",
+    "name": "KGM45台面式堆高機",
+    "spec": "載重：450KG｜面板尺寸：600X650mm｜面板最低高度：150mm",
+    "unit": "台",
+    "price": 37800,
+    "category": "KGM"
+  },
+  {
+    "code": "KGM45H",
+    "name": "KGM45H台面式堆高機",
+    "spec": "載重：450KG｜面板尺寸：600x650mm｜面板最低高度：150mm",
+    "unit": "台",
+    "price": 42000,
+    "category": "KGM"
+  },
+  {
+    "code": "KGX40-12",
+    "name": "KGX40-12踏舉式輕量型堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
+    "unit": "台",
+    "price": 16000,
+    "category": "KGX"
+  },
+  {
+    "code": "KGX-40-12DC",
+    "name": "KGX-40-12DC電動式輕量型堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
+    "unit": "台",
+    "price": 34000,
+    "category": "KGX"
+  },
+  {
+    "code": "KGX-40-15",
+    "name": "KGX-40-15踏舉式輕量型堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1500mm",
+    "unit": "台",
+    "price": 17500,
+    "category": "KGX"
+  },
+  {
+    "code": "KGX-40-15DC",
+    "name": "KGX-40-15DC電動式輕量型堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
+    "unit": "台",
+    "price": 35000,
+    "category": "KGX"
+  },
+  {
+    "code": "KGX-40-17",
+    "name": "KGX-40-17踏舉式輕量型堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1500mm",
+    "unit": "台",
+    "price": 18500,
+    "category": "KGX"
+  },
+  {
+    "code": "KGX-40-17DC",
+    "name": "KGX-40-17DC電動式輕量型堆高機",
+    "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
+    "unit": "台",
+    "price": 36000,
+    "category": "KGX"
+  },
+  {
+    "code": "LSCM340",
+    "name": "LSCM340 手攜式揚昇機",
+    "spec": "載重 : 120KG｜高度 : 950-3300mm｜頂板重量 : 5.3KG",
+    "unit": "台",
+    "price": 30500,
+    "category": "LSCM"
+  },
+  {
+    "code": "LSCM520",
+    "name": "LSCM520 手攜式揚昇機",
+    "spec": "載重 : 120KG - 4M / 90KG - 4.9M｜高度 : 1050-4900mm｜頂板重量 : 5.3KG",
+    "unit": "台",
+    "price": 39000,
+    "category": "LSCM"
+  },
+  {
+    "code": "LS400EQ",
+    "name": "LS400EQ農用電動搬運車(四輪式)",
+    "spec": "最大速度 : 5km/h｜最大載重 : 120KG｜最大坡度 : 12度",
+    "unit": "台",
+    "price": 26200,
+    "category": "LSES"
+  },
+  {
+    "code": "LSES-100",
+    "name": "LSES-100 電動搬運車(三輪式)",
+    "spec": "載重 : 120KG｜爬坡 : 30度｜載重 : 平地 120KG  爬坡 80KG",
+    "unit": "台",
+    "price": 23900,
+    "category": "LSES"
+  },
+  {
+    "code": "LSF-1025",
+    "name": "LSF-1025配重式電動升降堆高機",
+    "spec": "載重：1000KG｜牙叉最低：40mm｜牙叉最高：2500mm",
+    "unit": "台",
+    "price": 368500,
+    "category": "LSF"
+  },
+  {
+    "code": "LSF-1525",
+    "name": "LSF-1525立乘式電動升降堆高機",
+    "spec": "載重：1500KG｜牙叉最低：40mm｜牙叉最高：2500mm",
+    "unit": "台",
+    "price": 385000,
+    "category": "LSF"
+  },
+  {
+    "code": "LSF-2025",
+    "name": "LSF-2025立乘式電動升降堆高機",
+    "spec": "載重：2000KG｜牙叉最低：50mm｜牙叉最高：2500mm",
+    "unit": "台",
+    "price": 475500,
+    "category": "LSF"
+  },
+  {
+    "code": "LSGR6515",
+    "name": "LSGR6515 圓筒翻轉機",
+    "spec": "載重：300KG｜載重中心：705mm｜機台尺寸：1235x7901950mm",
+    "unit": "台",
+    "price": 430000,
+    "category": "LSGR"
+  },
+  {
+    "code": "LSJ-20",
+    "name": "LSJ-20立乘式電動拖板車",
+    "spec": "載重：2000KG｜牙叉最低：80mm｜牙叉最高：200mm",
+    "unit": "台",
+    "price": 0,
+    "category": "LSJ"
+  },
+  {
+    "code": "LSJ-25",
+    "name": "LSJ-25立乘式電動拖板車",
+    "spec": "載重：2500KG｜牙叉最低：80mm｜牙叉最高：200mm",
+    "unit": "台",
+    "price": 0,
+    "category": "LSJ"
+  },
+  {
+    "code": "LSJ-30",
+    "name": "LSJ-30立乘式電動拖板車",
+    "spec": "載重：3000KG｜牙叉最低：85mm｜牙叉最高：205mm",
+    "unit": "台",
+    "price": 0,
+    "category": "LSJ"
+  },
+  {
+    "code": "LSL-1028",
+    "name": "LSL-1028立乘式電動堆高機",
+    "spec": "載重：1000KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 209500,
+    "category": "LSL"
+  },
+  {
+    "code": "LSL-1228",
+    "name": "LSL-1228立乘式電動堆高機",
+    "spec": "載重：1200KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 229000,
+    "category": "LSL"
+  },
+  {
+    "code": "LSL-2028",
+    "name": "LSL-2028立乘式電動堆高機",
+    "spec": "載重：2000KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 276200,
+    "category": "LSL"
+  },
+  {
+    "code": "LSLM1210F",
+    "name": "LSLM1210F可摺疊牙叉式輕型堆高機",
+    "spec": "載重：150KG｜牙叉尺寸：370x590mm｜牙叉最高高度 : 1050mm",
+    "unit": "台",
+    "price": 20300,
+    "category": "LSLM"
+  },
+  {
+    "code": "LSLM1210H",
+    "name": "LSLM1210H可摺疊台面式輕型堆高機",
+    "spec": "載重：120KG｜面板：400x420mm｜台面最高高度： 1050mm",
+    "unit": "台",
+    "price": 19500,
+    "category": "LSLM"
+  },
+  {
+    "code": "LSM1028",
+    "name": "LSM1028自走式電動升降堆高機",
+    "spec": "載重：1000KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 186500,
+    "category": "LSM"
+  },
+  {
+    "code": "LSM1528",
+    "name": "LSM1528自走式電動升降堆高機",
+    "spec": "載重：1500KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 225000,
+    "category": "LSM"
+  },
+  {
+    "code": "LSM2028",
+    "name": "LSM2028自走式電動升降堆高機",
+    "spec": "載重：2000KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 245000,
+    "category": "LSM"
+  },
+  {
+    "code": "LSP-1025",
+    "name": "LSP-1025立乘式電動升降堆高機",
+    "spec": "載重：1000KG｜牙叉最低：90mm｜牙叉最高：2500mm",
+    "unit": "台",
+    "price": 162500,
+    "category": "LSP"
+  },
+  {
+    "code": "LSP-1225",
+    "name": "LSP-1225立乘式電動升降堆高機",
+    "spec": "載重：1200KG｜牙叉最低：90mm｜牙叉最高：2500mm",
+    "unit": "台",
+    "price": 187800,
+    "category": "LSP"
+  },
+  {
+    "code": "LSPV-0327",
+    "name": "LSPV-0327半電動高空作業機",
+    "spec": "載重：300KG｜上升最⾼⾼度：2700mm｜下降最低⾼度：315mm",
+    "unit": "台",
+    "price": 74000,
+    "category": "LSPV"
+  },
+  {
+    "code": "LSPV-0330",
+    "name": "LSPV-0330半電動高空作業機",
+    "spec": "載重：300KG｜上升最⾼⾼度：3000mm｜下降最低⾼度：315mm",
+    "unit": "台",
+    "price": 106000,
+    "category": "LSPV"
+  },
+  {
+    "code": "LSPV-0340",
+    "name": "LSPV-0340半電動高空作業機",
+    "spec": "載重：300KG｜上升最⾼⾼度：4000mm｜下降最低⾼度：315mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "LSPV"
+  },
+  {
+    "code": "LSPV-0350",
+    "name": "LSPV-0350半電動高空作業機",
+    "spec": "載重：300KG｜上升最⾼⾼度：5000mm｜下降最低⾼度：315mm",
+    "unit": "台",
+    "price": 130000,
+    "category": "LSPV"
+  },
+  {
+    "code": "LSR-1028",
+    "name": "LSR-1028桅桿前移式電動堆高機",
+    "spec": "載重：1000KG｜牙叉最低：40mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 298300,
+    "category": "LSR"
+  },
+  {
+    "code": "LSR-1228",
+    "name": "LSR-1228桅桿前移式電動堆高機",
+    "spec": "載重：1200KG｜牙叉最低：40mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 0,
+    "category": "LSR"
+  },
+  {
+    "code": "LSR-1528",
+    "name": "LSR-1528桅桿前移式電動堆高機",
+    "spec": "載重：1500KG｜牙叉最低：40mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 468800,
+    "category": "LSR"
+  },
+  {
+    "code": "LSR-1828",
+    "name": "LSR-1828桅桿前移式電動堆高機",
+    "spec": "載重：1800KG｜牙叉最低：50mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 437000,
+    "category": "LSR"
+  },
+  {
+    "code": "LSS-1028",
+    "name": "LSS-1028乘立式電動升降堆高機",
+    "spec": "載重：1000KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 238500,
+    "category": "LSS"
+  },
+  {
+    "code": "LSS-1628",
+    "name": "LSS-1628乘立式電動升降堆高機",
+    "spec": "載重：1600KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 271650,
+    "category": "LSS"
+  },
+  {
+    "code": "LSS-2028",
+    "name": "LSS-2028乘立式電動升降堆高機",
+    "spec": "載重：2000KG｜牙叉最低：90mm｜牙叉最高：2800mm",
+    "unit": "台",
+    "price": 271650,
+    "category": "LSS"
+  },
+  {
+    "code": "LSV-1016",
+    "name": "LSV-1016半電動升降堆高機",
+    "spec": "載重 : 1000KG｜牙叉最高高度：1600mm｜牙叉最低高度：90mm",
+    "unit": "台",
+    "price": 56500,
+    "category": "LSV"
+  },
+  {
+    "code": "LSV-1025",
+    "name": "LSV-1025半電動升降堆高機",
+    "spec": "載重 : 1000KG｜牙叉最高高度：2500mm｜牙叉最低高度：90mm",
+    "unit": "台",
+    "price": 63000,
+    "category": "LSV"
+  },
+  {
+    "code": "LSV-1225",
+    "name": "LSV-1225半電動升降堆高機",
+    "spec": "載重 : 1200KG｜牙叉最高高度：2500mm｜牙叉最低高度：90mm",
+    "unit": "台",
+    "price": 85000,
+    "category": "LSV"
+  },
+  {
+    "code": "LSV-1316",
+    "name": "LSV-1316半電動升降堆高機",
+    "spec": "載重 : 1300KG｜牙叉最高高度：1600mm｜牙叉最低高度：90mm",
+    "unit": "台",
+    "price": 0,
+    "category": "LSV"
+  },
+  {
+    "code": "LSV-1516",
+    "name": "LSV-1516半電動升降堆高機",
+    "spec": "載重 : 1500KG｜牙叉最高高度：1600mm｜牙叉最低高度：90mm",
+    "unit": "台",
+    "price": 82000,
+    "category": "LSV"
+  },
+  {
+    "code": "LSV-1525",
+    "name": "LSV-1516半電動升降堆高機",
+    "spec": "載重 : 1500KG｜牙叉最高高度：2500mm｜牙叉最低高度：90mm",
+    "unit": "台",
+    "price": 102800,
+    "category": "LSV"
+  },
+  {
+    "code": "LS-E50",
+    "name": "LS-E50斜傾式舉昇降台車(電動款)",
+    "spec": "載重：500KG｜最低位：90mm｜反轉最高位：905mm",
+    "unit": "台",
+    "price": 111200,
+    "category": "LS傾斜"
+  },
+  {
+    "code": "LS-E100",
+    "name": "LS-E100斜傾式舉昇降台車(電動款)",
+    "spec": "載重：1000KG｜最低位：90mm｜反轉最高位：910mm",
+    "unit": "台",
+    "price": 111200,
+    "category": "LS傾斜"
+  },
+  {
+    "code": "LS-H50",
+    "name": "LS-H50斜傾式舉昇降台車",
+    "spec": "載重：500KG｜最低位：90mm｜反轉最高位：905mm",
+    "unit": "台",
+    "price": 51000,
+    "category": "LS傾斜"
+  },
+  {
+    "code": "LS-H100",
+    "name": "LS-H100斜傾式舉昇降台車",
+    "spec": "載重：1000KG｜最低位：90mm｜反轉最高位：910mm",
+    "unit": "台",
+    "price": 56000,
+    "category": "LS傾斜"
+  },
+  {
+    "code": "LT25210",
+    "name": "LT25210超低床電動油壓升降平台",
+    "spec": "載重：250KG｜面板尺寸：520x1010mm｜最高高度：759mm",
+    "unit": "台",
+    "price": 61000,
+    "category": "LT"
+  },
+  {
+    "code": "LT25281",
+    "name": "LT25281超低床電動油壓升降平台",
+    "spec": "載重：250KG｜面板尺寸：520x810mm｜最高高度：529mm",
+    "unit": "台",
+    "price": 59000,
+    "category": "LT"
+  },
+  {
+    "code": "LT55210",
+    "name": "LT55210超低床電動油壓升降平台",
+    "spec": "載重： 500KG｜面板尺寸：520 x1010mm｜最高高度：760mm",
+    "unit": "台",
+    "price": 69000,
+    "category": "LT"
+  },
+  {
+    "code": "LT55281",
+    "name": "LT55281超低床電動油壓升降平台",
+    "spec": "載重： 500KG｜面板尺寸：520 x 810mm｜最高高度：530mm",
+    "unit": "台",
+    "price": 66000,
+    "category": "LT"
+  },
+  {
+    "code": "LT105212",
+    "name": "LT105212超低床電動油壓升降平台",
+    "spec": "載重 : 1000KG｜面板尺寸 : 520X1280mm｜最低高度 : 76mm",
+    "unit": "台",
+    "price": 76000,
+    "category": "LT"
+  },
+  {
+    "code": "LT107812",
+    "name": "LT107812超低床電動油壓升降平台",
+    "spec": "載重 : 1000KG｜面板尺寸：780x1280mm｜最低高度 : 76mm",
+    "unit": "台",
+    "price": 79000,
+    "category": "LT"
+  },
+  {
+    "code": "LT201015",
+    "name": "LT201015超低床電動油壓升降平台",
+    "spec": "載重： 2000 KG｜面板尺寸：1000x1500mm｜最高高度：995mm",
+    "unit": "台",
+    "price": 91000,
+    "category": "LT"
+  },
+  {
+    "code": "LT201020",
+    "name": "LT201020超低床電動油壓升降平台",
+    "spec": "載重: 2000KG｜面板尺寸: 1000x2000mm｜最高高度 : 995mm",
+    "unit": "台",
+    "price": 96000,
+    "category": "LT"
+  },
+  {
+    "code": "LT207313",
+    "name": "LT207313超低床電動油壓升降平台",
+    "spec": "載重： 2000KG｜面板尺寸：732x1350mm｜最高高度：995mm",
+    "unit": "台",
+    "price": 86000,
+    "category": "LT"
+  },
+  {
+    "code": "LT301015",
+    "name": "LT301015超低床電動油壓升降平台",
+    "spec": "載重： 3000KG｜面板尺寸：1000x1500mm｜最高高度：995mm",
+    "unit": "台",
+    "price": 110000,
+    "category": "LT"
+  },
+  {
+    "code": "LT301020",
+    "name": "LT301020超低床電動油壓升降平台",
+    "spec": "載重： 3000KG｜面板尺寸：1000x2000mm｜最高高度：995mm",
+    "unit": "台",
+    "price": 131000,
+    "category": "LT"
+  },
+  {
+    "code": "LT307313",
+    "name": "LT307313超低床電動油壓升降平台",
+    "spec": "載重： 3000KG｜面板尺寸：732x1350mm｜最高高度：995mm",
+    "unit": "台",
+    "price": 102000,
+    "category": "LT"
+  },
+  {
+    "code": "NWL18H",
+    "name": "NWL18H 輪椅升降平台(高揚程)",
+    "spec": "載重：180KG｜面板尺寸：925x1200mm｜最高高度：850mm(無載重時860mm)",
+    "unit": "台",
+    "price": 175000,
+    "category": "NWL"
+  },
+  {
+    "code": "NWL18L",
+    "name": "NWL18L 輪椅升降平台(低揚程)",
+    "spec": "載重：180KG｜面板尺寸：731x1000mm｜最高高度：660mm(無載重時660mm)",
+    "unit": "台",
+    "price": 165000,
+    "category": "NWL"
+  },
+  {
+    "code": "SL50",
+    "name": "SL50踏舉式油壓頂升拖板車",
+    "spec": "載重：500KG｜牙叉長度：1080mm｜牙叉寬度：520mm",
+    "unit": "台",
+    "price": 36290,
+    "category": "SL"
+  },
+  {
+    "code": "SL50E",
+    "name": "SL-50E油壓頂升拖板車",
+    "spec": "載重 :  500KG｜牙叉長度: 1080mm｜牙叉寬度: 520mm",
+    "unit": "台",
+    "price": 50000,
+    "category": "SL"
+  },
+  {
+    "code": "SL50N",
+    "name": "SL50N踏舉式油壓頂升拖板車",
+    "spec": "載重：500KG｜牙叉長度：1080mm｜牙叉寬度： 460mm",
+    "unit": "台",
+    "price": 34290,
+    "category": "SL"
+  },
+  {
+    "code": "SL50NSS",
+    "name": "SL50NSS油壓頂升拖板車",
+    "spec": "載重：500KG｜牙叉長度：809mm｜牙叉寬度： 460mm",
+    "unit": "台",
+    "price": 34290,
+    "category": "SL"
+  },
+  {
+    "code": "SL50SS",
+    "name": "SL50SS油壓頂升拖板車",
+    "spec": "載重：500KG｜牙叉長度：809mm｜牙叉寬度： 520mm",
+    "unit": "台",
+    "price": 34290,
+    "category": "SL"
+  },
+  {
+    "code": "SL50W",
+    "name": "SL50W踏舉油壓頂升拖板車",
+    "spec": "載重：500KG｜牙叉長度：1080mm｜牙叉寬度：685mm",
+    "unit": "台",
+    "price": 36410,
+    "category": "SL"
+  },
+  {
+    "code": "SL50WE",
+    "name": "SL50WE電動油壓頂升拖板車",
+    "spec": "載重：500KG｜牙叉長度：1080mm｜牙叉寬度：685mm",
+    "unit": "台",
+    "price": 52000,
+    "category": "SL"
+  },
+  {
+    "code": "SL100",
+    "name": "SL100 踏舉式油壓頂升拖板車",
+    "spec": "載重：1000KG｜牙叉長度：1080mm｜牙叉寬度：520mm",
+    "unit": "台",
+    "price": 40000,
+    "category": "SL"
+  },
+  {
+    "code": "SL100E",
+    "name": "SL100E電動油壓頂升拖板車",
+    "spec": "載重：1000KG｜牙叉長度：1080mm｜牙叉寬度：520mm",
+    "unit": "台",
+    "price": 56500,
+    "category": "SL"
+  },
+  {
+    "code": "SL100W",
+    "name": "SL100W踏舉式油壓頂升拖板車",
+    "spec": "載重：1000KG｜牙叉長度：1080mm｜牙叉寬度：685mm",
+    "unit": "台",
+    "price": 42000,
+    "category": "SL"
+  },
+  {
+    "code": "SL100WE",
+    "name": "SL100WE電動油壓頂升拖板車",
+    "spec": "載重：1000KG｜牙叉長度：1080mm｜牙叉寬度：685mm",
+    "unit": "台",
+    "price": 57500,
+    "category": "SL"
+  },
+  {
+    "code": "STH50",
+    "name": "STH50 踏舉式物流堆高機",
+    "spec": "載重：500KG｜牙叉最低高度：90mm｜牙叉最高高度：1590mm",
+    "unit": "台",
+    "price": 45000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STH65",
+    "name": "STH65 踏舉式物流堆高機",
+    "spec": "承    重：650kgs｜牙叉最低高度：90mm｜牙叉最高高度：1590mm",
+    "unit": "台",
+    "price": 93000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STH80",
+    "name": "STH80 踏舉式物流堆高機",
+    "spec": "承    重：800kgs｜牙叉最低高度：90mm｜牙叉最高高度：1590mm",
+    "unit": "台",
+    "price": 96000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STH100",
+    "name": "STH100 踏舉式物流堆高機",
+    "spec": "承    重：1000kgs｜牙叉最低高度：90mm｜牙叉最高高度：1590mm",
+    "unit": "台",
+    "price": 93000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STM25",
+    "name": "STM25踏舉式物流堆高機",
+    "spec": "承    重：250kgs｜牙叉最低高度：90mm｜牙叉最高高度：1290mm",
+    "unit": "台",
+    "price": 35000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STM38",
+    "name": "STM38踏舉式物流堆高機",
+    "spec": "承    重：380kgs｜牙叉最低高度：90mm｜牙叉最高高度：1290mm",
+    "unit": "台",
+    "price": 41500,
+    "category": "ST系列"
+  },
+  {
+    "code": "STM50",
+    "name": "STM50 踏舉式物流堆高機",
+    "spec": "載重：500KG｜牙叉最低高度：90mm｜牙叉最高高度：1290mm",
+    "unit": "台",
+    "price": 47000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STM65",
+    "name": "STM65踏舉式物流堆高機",
+    "spec": "載重：650KG｜牙叉最低高度：90mm｜牙叉最高高度：1290mm",
+    "unit": "台",
+    "price": 95000,
+    "category": "ST系列"
+  },
+  {
+    "code": "STS38",
+    "name": "STS38 踏舉式物流堆高機",
+    "spec": "載重：380KG｜牙叉最低高度：90mm｜牙叉最高高度：840mm",
+    "unit": "台",
+    "price": 47000,
+    "category": "ST系列"
+  },
+  {
+    "code": "TT15",
+    "name": "TT15可傾倒式畚斗台車",
+    "spec": "載重：150KG｜容積：120L｜機台尺寸：1022x535x798mm",
+    "unit": "台",
+    "price": 10900,
+    "category": "TT"
+  },
+  {
+    "code": "TT25",
+    "name": "TT25可傾倒式畚斗台車",
+    "spec": "載重：250KG｜容積：270L｜機台尺寸：1301x685x898mm",
+    "unit": "台",
+    "price": 12700,
+    "category": "TT"
+  },
+  {
+    "code": "TT25MH",
+    "name": "TT25MH踏舉式頂高傾倒畚斗台車",
+    "spec": "載重：250KG｜畚斗尺寸：1137x685x500mm｜畚斗低位：842mm",
+    "unit": "台",
+    "price": 18100,
+    "category": "TT25MH"
+  },
+  {
+    "code": "TT25TH",
+    "name": "TT25TH 踏舉式頂高傾倒畚斗台車",
+    "spec": "載重：250KG｜畚斗尺寸：1137x685x500mm｜畚斗低位：934mm",
+    "unit": "台",
+    "price": 21600,
+    "category": "TT25MH"
+  },
+  {
+    "code": "AS25",
+    "name": "AS255無段式電動傾倒機",
+    "spec": "載重：250KG｜揚程：1500mm｜傾倒畚斗離地高：1591mm",
+    "unit": "台",
+    "price": 98000,
+    "category": "TT25THE"
+  },
+  {
+    "code": "DA15",
+    "name": "DA15畚斗台車",
+    "spec": "台車尺寸：1007x535x798mm｜載重：150Kgs｜容積：120L",
+    "unit": "台",
+    "price": 8900,
+    "category": "TT25THE"
+  },
+  {
+    "code": "DA25",
+    "name": "DA25畚斗台車",
+    "spec": "台車尺寸：1292x685x898mm｜載重：250Kgs｜容積：270L",
+    "unit": "台",
+    "price": 9900,
+    "category": "TT25THE"
+  },
+  {
+    "code": "TT25MHE",
+    "name": "TT25MHE踏舉式頂高傾倒畚斗台車",
+    "spec": "載重：200KG｜畚斗尺寸：846x495x435mm｜畚斗低位：770㎜",
+    "unit": "台",
+    "price": 0,
+    "category": "TT25THE"
+  },
+  {
+    "code": "TT25THE",
+    "name": "TT25THE電動頂高傾倒式畚斗台車",
+    "spec": "承 重 ：200KG｜畚斗尺寸：846x495x435mm｜畚斗低位：860 mm",
+    "unit": "台",
+    "price": 45000,
+    "category": "TT25THE"
+  },
+  {
+    "code": "2T050510B",
+    "name": "2T050510B輕量型電動油壓升降平台(雙叉式)",
+    "spec": "載重：500KG｜面板尺寸：518x1010mm｜最低高度：235mm",
+    "unit": "台",
+    "price": 56000,
+    "category": "T輕型"
+  },
+  {
+    "code": "T20B",
+    "name": "T20B輕量型電動油壓升降平台",
+    "spec": "載重：200KG｜面板尺寸：500x650mm｜最低高度：150mm",
+    "unit": "台",
+    "price": 41000,
+    "category": "T輕型"
+  },
+  {
+    "code": "T30B",
+    "name": "T30B輕量型電動油壓升降平台",
+    "spec": "載重：300KG｜面板尺寸：500x813mm｜最高高度：715mm",
+    "unit": "台",
+    "price": 46000,
+    "category": "T輕型"
+  },
+  {
+    "code": "T50B",
+    "name": "T50B輕量型電動油壓升降平台",
+    "spec": "載重：500KG｜面板尺寸：518x1010mm｜最低高度：150mm",
+    "unit": "台",
+    "price": 49000,
+    "category": "T輕型"
+  },
+  {
+    "code": "T80B",
+    "name": "T80B輕量型電動油壓升降平台",
+    "spec": "載重：800KG｜面板尺寸：518x1010mm｜最低高度：150mm",
+    "unit": "台",
+    "price": 51000,
+    "category": "T輕型"
+  },
+  {
+    "code": "L50080HT",
+    "name": "L50080HT兩用式梯車",
+    "spec": "樓梯踏板載重：120KG｜推車載重 : 60KG｜梯子展開尺寸：735*470*1190 mm",
+    "unit": "台",
+    "price": 0,
+    "category": "手推車"
+  },
+  {
+    "code": "LS-100",
+    "name": "LS-100全薄型摺疊手推車",
+    "spec": "載重：120KG｜使用尺寸：680x410x920mm｜收納尺寸:680x410x80mm",
+    "unit": "台",
+    "price": 1800,
+    "category": "手推車"
+  },
+  {
+    "code": "LS-960",
+    "name": "LS-960 折疊式手推車",
+    "spec": "載重：500KG｜檯面尺寸：900x600x900mm｜輪子尺寸：5\"輪",
+    "unit": "台",
+    "price": 2899,
+    "category": "手推車"
+  },
+  {
+    "code": "LS39059",
+    "name": "LS-39059折疊式手推車",
+    "spec": "載重：300KG｜台面尺寸: 900x590x300mm｜機身重量：15kg",
+    "unit": "台",
+    "price": 2450,
+    "category": "手推車"
+  },
+  {
+    "code": "50加侖桶鐵烏龜車",
+    "name": "50加侖桶鐵烏龜車",
+    "spec": "載重：300KG｜尺寸：Ø600mm｜輪子配置：4顆活動輪",
+    "unit": "台",
+    "price": 0,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LS-640",
+    "name": "LS-640塑鋼小烏龜車 (無檔邊)",
+    "spec": "載重：300KG｜尺寸 :  610x415x35mm｜輪子配置：4顆活動輪",
+    "unit": "台",
+    "price": 950,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LS-640L",
+    "name": "LS-640L(有檔邊)塑鋼小烏龜車",
+    "spec": "載重：300KG｜尺寸：610x415x85mm",
+    "unit": "台",
+    "price": 980,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LS-670",
+    "name": "LS-670 (無檔邊) 塑鋼小烏龜車",
+    "spec": "載重：300KG｜尺寸：670x460x145mm｜輪子配置：4顆活動輪",
+    "unit": "台",
+    "price": 950,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LS-670L",
+    "name": "LS-670L(有檔邊)塑鋼小烏龜車",
+    "spec": "載重：300KG｜尺寸：670x460x165mm｜輪子配置：4顆活動輪",
+    "unit": "台",
+    "price": 1000,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LS-850",
+    "name": "LS-850(無檔邊)塑鋼小烏龜車",
+    "spec": "載重：300KG｜尺寸：812x503x142mm｜輪子配置：4顆活動輪",
+    "unit": "台",
+    "price": 1150,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LSI-150",
+    "name": "LSI-150平板車(鐵烏龜車)",
+    "spec": "載重：150KG｜尺寸：530x350x140mm｜檔邊高度：30mm",
+    "unit": "台",
+    "price": 980,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LSI-200",
+    "name": "LSI-200平板車(鐵烏龜車)",
+    "spec": "載重：200KG｜尺寸：640x440x140mm｜檔邊高度：30mm",
+    "unit": "台",
+    "price": 1150,
+    "category": "烏龜車"
+  },
+  {
+    "code": "LSP-670L",
+    "name": "LSP-670L(有檔邊) 塑膠平板車",
+    "spec": "載重：200KG｜面    板：650x450mm｜檔邊高度：20.5mm",
+    "unit": "台",
+    "price": 1000,
+    "category": "烏龜車"
   }
 ]
