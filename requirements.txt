@@ -1,0 +1,12 @@
+openpyxl>=3.1
+requests>=2.31
+tkcalendar>=1.6
+Babel>=2.14
+Pillow>=10.0
+PyMuPDF>=1.23
+python-docx>=1.1
+lxml>=5.0
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.1
+tksheet>=7.0
+pyinstaller>=6.0

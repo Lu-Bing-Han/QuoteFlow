@@ -1,61 +1,92 @@
-# 報價單 → 出貨單 轉換工具
+# QuoteFlow
+
+立善科技內部單據生成工具，支援出貨單、報價單、驗機單、維修單、標籤列印、出貨排程、Trello 卡片同步等功能。
 
 ## 專案結構
 
 ```
-quote_to_shipping/
-├── src/
-│   ├── app.py        # GUI 主程式 (入口)
-│   ├── parser.py     # 報價單解析器
-│   └── generator.py  # 出貨單產生器
-├── template/
-│   └── template.xlsx # 出貨單模板 (請保留，不要刪除)
-├── output/           # 生成的出貨單會存在這裡
-└── README.md
+src/
+├── app.py                    ← 入口（PyInstaller 打包起點）
+├── _paths.py                 ← 路徑常數（開發 / 打包雙模式）
+├── core/
+│   ├── __init__.py
+│   ├── parser.py             ← 報價單解析
+│   ├── generator.py          ← 出貨單生成
+│   ├── generator_fix.py      ← 維修單生成
+│   ├── generator_tag.py      ← 維修掛件生成
+│   ├── generator_label.py    ← 標籤 PDF 生成
+│   ├── generator_inspection.py ← 驗機單生成
+│   ├── generator_schedule.py ← 出貨排程生成
+│   └── generator_quote.py    ← 報價單生成
+├── sync/
+│   ├── __init__.py
+│   ├── syncer_trello.py      ← Trello 卡片抓取
+│   ├── syncer_sheets.py      ← Google Sheets 同步
+│   ├── syncer_production.py  ← 生產群組紀錄同步
+│   ├── creator_trello.py     ← Trello 卡片建立
+│   └── downloader_trello.py  ← Trello 卡片下載
+└── ui/
+    ├── __init__.py
+    ├── app_core.py           ← 主視窗 App 類別 + 共用方法
+    ├── mixin_documents.py    ← 出貨單、驗機單、維修單、維修掛件頁籤
+    ├── mixin_quote.py        ← 報價單頁籤
+    ├── mixin_label.py        ← 標籤生成頁籤
+    ├── mixin_schedule.py     ← 出貨排程頁籤
+    └── mixin_trello.py       ← Trello 相關頁籤
+
+template/                     ← Excel / PDF 範本、憑證檔案
+QuoteFlow.spec                ← PyInstaller 打包設定
+requirements.txt              ← Python 套件需求
 ```
 
-## 環境安裝
+## 環境需求
+
+- Python 3.10+
+- 安裝套件：`pip install -r requirements.txt`
+
+## 開發執行
+
+從專案根目錄執行：
 
 ```bash
-pip install openpyxl pandas
+python src/app.py
 ```
 
-## 啟動程式
+## 打包
 
 ```bash
-cd quote_to_shipping/src
-python app.py
+pyinstaller QuoteFlow.spec
 ```
 
-## 使用流程
+輸出位置：`dist\QuoteFlow.exe`
 
-1. 點擊「選擇報價單 .xlsx」匯入報價單
-2. 左側會自動填入客戶資料（唯讀）
-3. 右側補填出貨日期、銷貨單號、製表人員
-4. 品項列表可雙擊編輯、新增或刪除
-5. 點「生成出貨單」→ 自動存到 output/ 資料夾
+## 輸出路徑設定
 
-## 打包成執行檔 (不需安裝 Python 也能跑)
+點擊右上角 ⚙ 圖示，可設定各功能的輸出資料夾或目標 Excel 路徑，設定儲存於執行檔同目錄的 `config.json`。
 
-```bash
-pip install pyinstaller
-pyinstaller --onefile --windowed --name 出貨單轉換工具 src/app.py
-```
-生成的執行檔在 `dist/` 資料夾。
+## template/ 說明
 
-## 欄位對應邏輯
+| 檔案 | 說明 |
+|------|------|
+| template_AP.xlsx | 出貨單範本 |
+| template_quote.xlsx | 報價單範本 |
+| template_schedule.xlsx | 出貨排程範本（含地址工作表）|
+| products.json | 報價產品目錄 |
+| credentials.json | Google Sheets OAuth 憑證（自行放置）|
+| icon.png | 應用程式圖示 |
 
-| 報價單儲存格 | 意義       | → 出貨單儲存格 |
-|------------|-----------|--------------|
-| B9         | 報價單號   | (參考用)      |
-| B10        | 客戶全名   | C4            |
-| B11        | 電話       | C5            |
-| B12        | 聯絡人     | F5            |
-| H9         | 幣別       | I5            |
-| 第15行起   | 品項列表   | 第8行起       |
+## 功能說明
 
-## 注意事項
-
-- `template/template.xlsx` 是出貨單的底板，格式、字型、框線都從這裡繼承
-- 若報價單品項規格跨多行（例如「前小輪」補充說明），程式會自動合併成一行
-- 出貨單輸出檔名格式：`出貨單-{客戶名稱}-{出貨日期}.xlsx`
+| 頁籤 | 說明 |
+|------|------|
+| 出貨單 | 從報價單生成出貨單 Excel |
+| 報價單 | 三步驟流程（Trello 客戶 → 選取品項 → 生成報價單 Excel）|
+| 驗機單 | 從報價單生成驗機單 Excel + Word |
+| 維修單 | 從報價單生成維修單 |
+| 維修掛件 | 生成維修掛件 Word 文件 |
+| 標籤生成 | 批次生成標籤 PDF（多種樣式）|
+| 出貨排程 | 抓取 Timetree 行事曆，計算行車時間，寫入排程表 |
+| 出貨一覽表 | 同步 Trello 本周下單 → Google Sheets |
+| 生產群組紀錄 | 同步 Trello → 生產群組紀錄 Excel |
+| 建立卡片 | 從 Excel 批次建立 Trello 卡片 |
+| 下載卡片 | 下載 Trello 卡片描述與附件 |

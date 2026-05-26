@@ -22,3 +22,9 @@ TEMPLATE_DIR = _template_dir()
 OUTPUT_DIR   = EXE_DIR / "output"
 CONFIG_PATH  = EXE_DIR / "config.json"
 ICON_PATH    = TEMPLATE_DIR / "icon.png"
+
+# Derived paths used by sync tabs
+_GSHEETS_TOKEN_PATH     = EXE_DIR  / "gsheets_token.json"
+_SYNCED_CARDS_PATH      = EXE_DIR  / "synced_cards.json"
+_GSHEETS_CREDS_PATH     = TEMPLATE_DIR / "credentials.json"
+_PRODUCTION_SYNCED_PATH = EXE_DIR  / "production_synced_cards.json"
