@@ -18,9 +18,11 @@ from ui.mixin_quote     import _QuoteTab
 from ui.mixin_label     import _LabelTab
 from ui.mixin_schedule  import _ScheduleTab
 from ui.mixin_trello    import _TrelloTab
+from ui.mixin_history   import _HistoryTab
 
 # ── Core imports ──────────────────────────────────────────
 from core.parser import parse
+from core.db import init_db, set_db_path
 
 
 # ════════════════════════════════════════════════════════
@@ -48,6 +50,7 @@ class App(
     _LabelTab,
     _ScheduleTab,
     _TrelloTab,
+    _HistoryTab,
     tk.Tk,
 ):
     """Main application window — inherits all mixin tab builders."""
@@ -90,6 +93,8 @@ class App(
         self._parsed_data = None
         self._src_path = None
         self._config = _load_config()
+        set_db_path(self._config.get("db_path"))   # 若有設定共用路徑則套用
+        init_db()       # 建立資料庫 / 資料表（已存在則略過）
         self._build_ui()
 
     # ════════════════════════════════════════════════════════
@@ -213,6 +218,9 @@ class App(
         _nav_item("建立卡片",     "create")
         _nav_item("下載卡片",     "download")
 
+        _nav_group("🗂  記錄查詢")
+        _nav_item("報價記錄",     "history")
+
         # ── 建立各頁面內容 ────────────────────────────────────
         self._build_tab_shipping(   _make_page("shipping"),   PAD, FONT, FONTB, BG)
         self._build_tab_quote(      _make_page("quote"),      FONT, FONTB, BG)
@@ -225,6 +233,7 @@ class App(
         self._build_tab_production( _make_page("production"), FONT, FONTB, BG)
         self._build_tab_create_cards( _make_page("create"),   FONT, FONTB, BG)
         self._build_tab_download_cards(_make_page("download"),FONT, FONTB, BG)
+        self._build_tab_history(    _make_page("history"),    FONT, FONTB, BG)
 
         # 預設顯示出貨單
         _show("shipping")
@@ -247,7 +256,38 @@ class App(
         dlg.grab_set()
         dlg.update_idletasks()
         sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
-        dlg.geometry(f"720x560+{(sw-720)//2}+{(sh-560)//2}")
+        dlg.geometry(f"720x620+{(sw-720)//2}+{(sh-620)//2}")
+
+        # ── 資料庫路徑設定 ────────────────────────────────────
+        db_lf = tk.LabelFrame(dlg, text="資料庫設定", bg=BG, font=FONTB)
+        db_lf.pack(fill="x", padx=16, pady=(16, 6))
+        db_lf.columnconfigure(1, weight=1)
+
+        tk.Label(db_lf, text="資料庫路徑：", bg=BG, font=FONT_S, fg=GRAY,
+                 anchor="w").grid(row=0, column=0, sticky="w", padx=(8, 2), pady=5)
+        db_path_var = tk.StringVar(value=self._config.get("db_path", ""))
+        tk.Entry(db_lf, textvariable=db_path_var, font=FONT_S
+                 ).grid(row=0, column=1, sticky="ew", padx=(0, 4), pady=5)
+
+        def _pick_db():
+            p = filedialog.askopenfilename(
+                title="選擇資料庫檔案",
+                filetypes=[("SQLite 資料庫", "*.db"), ("所有檔案", "*.*")],
+                parent=dlg)
+            if p:
+                db_path_var.set(p)
+                # 選完立即寫入 config，不需要另外按「儲存並關閉」
+                self._config["db_path"] = p
+                set_db_path(p)
+                self._save_config(self._config)
+
+        tk.Button(db_lf, text="選擇", command=_pick_db,
+                  bg="#2e86c1", fg="white", relief="flat",
+                  font=FONT_S, padx=6).grid(row=0, column=2, padx=(0, 8), pady=5)
+        tk.Label(db_lf,
+                 text="留空 = 使用本機預設路徑；填入 NAS 路徑可多台電腦共用同一份資料庫",
+                 bg=BG, font=("Microsoft JhengHei UI", 8), fg=GRAY
+                 ).grid(row=1, column=0, columnspan=3, sticky="w", padx=8, pady=(0, 6))
 
         items = [
             ("output_shipping",   "出貨單 / 維修單 輸出資料夾", False),
@@ -384,6 +424,13 @@ class App(
             if new_operators:
                 self._config["operators"]      = new_operators
                 self._config["operator_codes"] = new_codes
+
+            db_path = db_path_var.get().strip()
+            if db_path:
+                self._config["db_path"] = db_path
+            else:
+                self._config.pop("db_path", None)
+            set_db_path(db_path or None)
 
             self._save_config(self._config)
             messagebox.showinfo("已儲存", "設定已儲存", parent=dlg)

@@ -3,6 +3,9 @@ generator_quote.py — 從 Trello 卡片資料填入報價單範本，生成 .xl
 """
 import copy as _copy
 import json
+from openpyxl.cell.cell import MergedCell as _MergedCell
+from openpyxl.cell.rich_text import CellRichText as _CellRichText, TextBlock as _TextBlock
+from openpyxl.cell.text import InlineFont as _InlineFont
 import re
 from datetime import date, timedelta
 from pathlib import Path
@@ -64,15 +67,15 @@ def _label_merge_end_col(ws, row: int, label_col: int) -> int:
 
 
 def _find_value_col(ws, row: int, label_col: int) -> int:
-    """跳過 label 的合併範圍，找同列第一個可填入的值格。"""
-    # 先確定 label merge 的右邊界，從其右一格開始找
+    """跳過 label 的合併範圍，找同列第一個可填入的值格（非 MergedCell）。"""
     start = _label_merge_end_col(ws, row, label_col) + 1
     for c in range(start, start + 8):
         cell = ws.cell(row=row, column=c)
-        val  = cell.value
+        if isinstance(cell, _MergedCell):
+            continue  # 合併區域非左上角格，無法寫入，跳過
+        val = cell.value
         if val is None:
             return c
-        # 只含冒號或空白也視為空
         if isinstance(val, str) and _norm(val) == "":
             return c
     return start
@@ -101,7 +104,10 @@ def _fill_field(ws, label_kw_norm: str, value) -> bool:
                 continue
             if label_kw_norm in _norm(str(cell.value)):
                 target_col = _find_value_col(ws, cell.row, cell.column)
-                out_cell = ws.cell(row=cell.row, column=target_col, value=value)
+                out_cell = ws.cell(row=cell.row, column=target_col)
+                if isinstance(out_cell, _MergedCell):
+                    return False  # 找不到可寫格，跳過此欄位
+                out_cell.value = value
                 # 強制純文字，防止 Excel 自動將 email / URL 轉成超連結
                 if isinstance(value, str) and ("@" in value or value.startswith("http")):
                     out_cell.number_format = "@"
@@ -542,7 +548,13 @@ PRODUCT_ROWS: dict[str, tuple[str, int, int]] = {
 # 向下相容舊名稱
 PRODUCT_AP_ROWS = {k: v[1:] for k, v in PRODUCT_ROWS.items()}
 
-_PRODUCT_START_ROW = 15   # template_quote 品項區起始列
+_PRODUCT_START_ROW = 15   # template_quote / allowance 品項區起始列
+_PRODUCT_START_ROW_COMPARE = 11   # template_quote_compare 品項區起始列
+
+# quote_type 常數
+QUOTE_TYPE_REGULAR   = "regular"
+QUOTE_TYPE_ALLOWANCE = "allowance"
+QUOTE_TYPE_COMPARE   = "compare"
 
 
 # ── 品項列 border 樣式（從 template_quote R15 讀出的規格）────────
@@ -613,6 +625,7 @@ def generate_quote_from_cart(
     quote_date: date,
     operator: str = "",
     shipping: dict | None = None,
+    quote_type: str = QUOTE_TYPE_REGULAR,
 ) -> Path:
     """將購物車品項填入 template_quote.xlsx，生成完整報價單。
 
@@ -625,6 +638,13 @@ def generate_quote_from_cart(
     """
     valid_date = quote_date + timedelta(days=15)
 
+    # ── 依報價單類型決定起始列 ──────────────────────────────
+    prod_start_row = (
+        _PRODUCT_START_ROW_COMPARE
+        if quote_type == QUOTE_TYPE_COMPARE
+        else _PRODUCT_START_ROW
+    )
+
     # ── 1. 開啟 template_quote ──────────────────────────────
     try:
         wb = openpyxl.load_workbook(str(template_path))
@@ -634,6 +654,20 @@ def generate_quote_from_cart(
         else:
             raise
     ws = wb.active
+    _template_img_count = len(ws._images)  # template 預埋圖片數（印章等）
+    # 記錄每張預埋圖片的原始錨點列號，用來區分 logo（靠上）與印章（靠下）
+    _template_img_orig_rows = []
+    for _ti in ws._images:
+        _anc = getattr(_ti, "anchor", None)
+        if isinstance(_anc, str):
+            _m = re.search(r"(\d+)$", _anc)
+            _orig_row = int(_m.group(1)) if _m else 0
+        else:
+            # anchor 是 openpyxl 物件（TwoCellAnchor / OneCellAnchor）
+            # 直接讀 _from.row 或 marker.row（0-indexed → +1）
+            _from = getattr(_anc, "_from", None) or getattr(_anc, "marker", None)
+            _orig_row = (getattr(_from, "row", 0) or 0) + 1 if _from else 0
+        _template_img_orig_rows.append(_orig_row)
 
     # ── 2. 開啟 template_series（來源規格，多工作表）───────────────
     ap_path = template_path.parent / "template_series.xlsx"
@@ -652,41 +686,66 @@ def generate_quote_from_cart(
             return wb_ap[sheet_name]
         return wb_ap.active  # 相容舊版單一工作表
 
-    # ── 3. 填入顧客資訊（欄位掃描填入）─────────────────────
-    header_map = {
-        "客戶全名":  customer.get("company", ""),
-        "電話":      customer.get("phone",   ""),
-        "傳真":      customer.get("fax",     ""),
-        "聯絡人":    customer.get("contact", ""),
-        "聯絡地址":  customer.get("address", ""),
-        "統一編號":  customer.get("tax_id",  ""),
-        "EMAIL":     customer.get("email",   ""),
-        "報價日期":  quote_date.strftime("%Y/%m/%d"),
-        "有效日期":  valid_date.strftime("%Y/%m/%d"),
-        "報價單號":  quote_no,
-    }
-    for label_kw, value in header_map.items():
-        if value:
-            _fill_field(ws, _norm(label_kw), value)
+    # ── 3. 填入顧客資訊 ──────────────────────────────────────
+    if quote_type == QUOTE_TYPE_COMPARE:
+        # 對比報價單：直接定位填入，不掃描全表（R1-R4 為公司自身資料，不可覆寫）
+        # R5：日期（標籤與值同格）
+        ws.cell(5, 1).value = f"報價日期  :  {quote_date.strftime('%Y/%m/%d')}"
+        # R6-R9：依標籤欄位直接定位
+        _cmp_header = [
+            (6, 1, customer.get("company",  "")),   # 客戶全名
+            (6, 7, quote_no),                        # 報價單號
+            (7, 1, customer.get("phone",    "")),    # 電話
+            (7, 7, customer.get("fax",      "")),    # 傳真
+            (8, 1, customer.get("contact",  "")),    # 聯絡人
+            (8, 7, customer.get("tax_id",   "")),    # 統一編號
+            (9, 1, customer.get("address",  "")),    # 聯絡地址
+            (9, 7, customer.get("email",    "")),    # E-MAIL
+        ]
+        for _r, _lc, _v in _cmp_header:
+            if _v:
+                _vc = _find_value_col(ws, _r, _lc)
+                _oc = ws.cell(_r, _vc)
+                if not isinstance(_oc, _MergedCell):
+                    _oc.value = _v
+    else:
+        header_map = {
+            "客戶全名":  customer.get("company", ""),
+            "電話":      customer.get("phone",   ""),
+            "傳真":      customer.get("fax",     ""),
+            "聯絡人":    customer.get("contact", ""),
+            "聯絡地址":  customer.get("address", ""),
+            "統一編號":  customer.get("tax_id",  ""),
+            "EMAIL":     customer.get("email",   ""),
+            "報價日期":  quote_date.strftime("%Y/%m/%d"),
+            "有效日期":  valid_date.strftime("%Y/%m/%d"),
+            "報價單號":  quote_no,
+        }
+        for label_kw, value in header_map.items():
+            if value:
+                _fill_field(ws, _norm(label_kw), value)
 
-    # ── 4. 找 營業稅 列（刪除 / 插入前先記下位置）───────────
+    # ── 4. 找 footer 錨點列（補助=總應付金額, 其餘=營業稅）───────────
+    if quote_type == QUOTE_TYPE_ALLOWANCE:
+        _anchor_kw = "總應付金額"
+    else:
+        _anchor_kw = "營業稅"
+
     tax_row = None
     for r in ws.iter_rows():
         for cell in r:
-            if cell.value and "營業稅" in str(cell.value):
+            if cell.value and _anchor_kw in str(cell.value):
                 tax_row = cell.row
                 break
         if tax_row:
             break
     if tax_row is None:
-        tax_row = 17
+        tax_row = prod_start_row + 2
 
-    # ── 5. 取出 footer 合併範圍（R15+，之後重新定位）───────────
-    #    openpyxl 的 delete_rows / insert_rows 不會自動更新 merged_cells，
-    #    需手動移除再重新加入。
+    # ── 5. 取出 footer 合併範圍（prod_start_row+，之後重新定位）────
     footer_merges: list[dict] = []
     stale_ranges  = [rng for rng in ws.merged_cells.ranges
-                     if rng.min_row >= _PRODUCT_START_ROW]
+                     if rng.min_row >= prod_start_row]
     for rng in stale_ranges:
         footer_merges.append({
             "row_offset":     rng.min_row - tax_row,
@@ -696,15 +755,15 @@ def generate_quote_from_cart(
         })
         ws.unmerge_cells(str(rng))
 
-    # ── 6. 刪除原有佔位品項列（R15 到 tax_row-1）────────────
-    placeholder_count = tax_row - _PRODUCT_START_ROW
+    # ── 6. 刪除原有佔位品項列 ───────────────────────────────
+    placeholder_count = tax_row - prod_start_row
     if placeholder_count > 0:
-        ws.delete_rows(_PRODUCT_START_ROW, placeholder_count)
-        tax_row -= placeholder_count   # 營業稅列上移
+        ws.delete_rows(prod_start_row, placeholder_count)
+        tax_row -= placeholder_count
 
     # ── 7. 逐品號插入資料列 ──────────────────────────────────
-    insert_pos     = _PRODUCT_START_ROW
-    first_item_row = _PRODUCT_START_ROW
+    insert_pos     = prod_start_row
+    first_item_row = prod_start_row
 
     for idx, item in enumerate(cart_items):
         code  = item.get("code",  "")
@@ -763,15 +822,17 @@ def generate_quote_from_cart(
                 pass
 
         # ── 插入產品圖片（Picture/{品號}.png） ────────────────
+        # 產品圖片暫時用原始邏輯定位（G欄、序號列+3）
+        # 印章圖（template 預埋）會在所有品項插完後統一重定位到 footer 備註:
         pic_dir = template_path.parent / "Picture"
         for _ext in ("png", "jpg", "jpeg", "bmp"):
             pic_file = pic_dir / f"{code}.{_ext}"
             if pic_file.exists():
                 try:
                     _img = _XlImage(str(pic_file))
-                    _img.width  = 205   # ~5.4 cm
-                    _img.height = 162   # ~4.3 cm
-                    _img.anchor = f"{_col_letter(7)}{hrow + 3}"   # G欄，序號列+3
+                    _img.width  = 205
+                    _img.height = 162
+                    _img.anchor = f"{_col_letter(7)}{hrow + 3}"
                     ws.add_image(_img)
                 except Exception:
                     pass
@@ -839,26 +900,35 @@ def generate_quote_from_cart(
             tax_row   += 1
             insert_pos += 1
 
-    # ── 9. 更新 營業稅 / 應收總金額 公式 ────────────────────
+    # ── 9. 更新 footer 金額公式（依 quote_type 不同） ────────
     last_item_row = insert_pos - 1
 
-    tax_cell = ws.cell(row=tax_row, column=8,
-                       value=f"=ROUND(SUM(I{first_item_row}:I{last_item_row})*0.05,0)")
-    tax_cell.number_format = _NUM_FMT
+    if quote_type == QUOTE_TYPE_ALLOWANCE:
+        # 補助報價單：價格已含稅，直接加總，tax_row 就是「總應付金額」列
+        tot_cell = ws.cell(row=tax_row, column=8,
+                           value=f"=SUM(I{first_item_row}:I{last_item_row})")
+        tot_cell.number_format = _NUM_FMT
 
-    # 找 應收總金額 列
-    total_row = None
-    for r in ws.iter_rows(min_row=tax_row):
-        for cell in r:
-            if cell.value and "應收總金額" in str(cell.value):
-                total_row = cell.row
+    else:
+        # 一般 / 對比：tax_row = 營業稅列，另找總金額列
+        tax_cell = ws.cell(row=tax_row, column=8,
+                           value=f"=ROUND(SUM(I{first_item_row}:I{last_item_row})*0.05,0)")
+        tax_cell.number_format = _NUM_FMT
+
+        # 對比用「總金額」；一般用「應收總金額」
+        _total_kw = "總金額" if quote_type == QUOTE_TYPE_COMPARE else "應收總金額"
+        total_row = None
+        for r in ws.iter_rows(min_row=tax_row):
+            for cell in r:
+                if cell.value and _total_kw in str(cell.value):
+                    total_row = cell.row
+                    break
+            if total_row:
                 break
         if total_row:
-            break
-    if total_row:
-        tot_cell = ws.cell(row=total_row, column=8,
-                           value=f"=SUM(I{first_item_row}:I{last_item_row})+H{tax_row}")
-        tot_cell.number_format = _NUM_FMT
+            tot_cell = ws.cell(row=total_row, column=8,
+                               value=f"=SUM(I{first_item_row}:I{last_item_row})+H{tax_row}")
+            tot_cell.number_format = _NUM_FMT
 
     # ── 9. 重新設定 footer 合併範圍（依最終 tax_row 位置）──────
     for fm in footer_merges:
@@ -872,6 +942,70 @@ def generate_quote_from_cart(
     # ── 10. 製表人 ───────────────────────────────────────────
     if operator:
         _fill_field(ws, _norm("製表人"), operator)
+
+    # ── 10b. 印章（template 預埋圖片）重定位到 footer ──────────
+    # 一般報價單：圖片完全不動
+    # 補助報價單：找「備註」    → (i,   j+4)
+    # 對比報價單：找「確認章：」→ (i-3, j+2)
+    if _template_img_count > 0 and quote_type != QUOTE_TYPE_REGULAR:
+        _stamp_r, _stamp_c = None, None
+        if quote_type == QUOTE_TYPE_COMPARE:
+            for _row in ws.iter_rows():
+                for _cell in _row:
+                    if isinstance(_cell, _MergedCell):
+                        continue
+                    if _cell.value and "確認章" in re.sub(r"\s", "", str(_cell.value)):
+                        if _stamp_r is None or _cell.row > _stamp_r:
+                            _stamp_r, _stamp_c = _cell.row, _cell.column
+            if _stamp_r:
+                _stamp_anchor = f"{_col_letter(_stamp_c + 2)}{_stamp_r - 3}"
+        else:
+            for _row in ws.iter_rows():
+                for _cell in _row:
+                    if isinstance(_cell, _MergedCell):
+                        continue
+                    if _cell.value and re.sub(r"\s", "", str(_cell.value)).startswith("備註"):
+                        if _stamp_r is None or _cell.row > _stamp_r:
+                            _stamp_r, _stamp_c = _cell.row, _cell.column
+            if _stamp_r:
+                _stamp_anchor = f"{_col_letter(_stamp_c + 4)}{_stamp_r}"
+        if _stamp_r:
+            _max_orig_row = max(_template_img_orig_rows) if _template_img_orig_rows else 0
+            for _i, _ti in enumerate(ws._images[:_template_img_count]):
+                if _template_img_orig_rows[_i] < _max_orig_row:
+                    continue  # logo，位置不動
+                _ti.anchor = _stamp_anchor
+                _ti.width  = 178    # 4.7 cm
+                _ti.height = 177    # 4.69 cm
+
+    # ── 10d. 補回 (含稅) 紅色字——只讓 "(含稅)" 部分為紅色 ──
+    for _row in ws.iter_rows():
+        for _c in _row:
+            if isinstance(_c, _MergedCell):
+                continue
+            _val = _c.value
+            if not _val or "(含稅)" not in str(_val):
+                continue
+            _text = str(_val)
+            _idx  = _text.find("(含稅)")
+            _before = _text[:_idx]
+            _after  = _text[_idx + len("(含稅)"):]
+            # 保留原有字型屬性，只對 (含稅) 加紅色
+            _f = _c.font
+            _kw: dict = {}
+            if _f.name:   _kw["rFont"] = _f.name
+            if _f.sz:     _kw["sz"]    = _f.sz
+            if _f.bold:   _kw["b"]     = _f.bold
+            if _f.italic: _kw["i"]     = _f.italic
+            _base = _InlineFont(**_kw)
+            _red  = _InlineFont(**{**_kw, "color": "FF0000"})
+            _parts: list = []
+            if _before:
+                _parts.append(_TextBlock(_base, _before))
+            _parts.append(_TextBlock(_red, "(含稅)"))
+            if _after:
+                _parts.append(_TextBlock(_base, _after))
+            _c.value = _CellRichText(*_parts)
 
     # ── 11. 儲存 ─────────────────────────────────────────────
     output_dir.mkdir(parents=True, exist_ok=True)

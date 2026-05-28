@@ -385,13 +385,22 @@ class _QuoteTab:
         date_entry.pack(side="left", padx=(0, 6))
 
         cfg_row1 = tk.Frame(cfg_f, bg=BG)
-        cfg_row1.pack(fill="x", padx=6, pady=(2, 6))
+        cfg_row1.pack(fill="x", padx=6, pady=(2, 2))
         valid_lbl = tk.Label(cfg_row1, text="", bg=BG, font=FONT_S, fg=GRAY)
         valid_lbl.pack(side="left", padx=(0, 16))
         tk.Label(cfg_row1, text="報價單號：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
         quote_no_var = tk.StringVar()
         tk.Entry(cfg_row1, textvariable=quote_no_var, font=FONT_S, width=16
                  ).pack(side="left", padx=(0, 6))
+
+        cfg_row2 = tk.Frame(cfg_f, bg=BG)
+        cfg_row2.pack(fill="x", padx=6, pady=(2, 6))
+        tk.Label(cfg_row2, text="報價單類型：", bg=BG, font=FONT_S, fg=GRAY).pack(side="left")
+        _QUOTE_TYPE_OPTIONS = ["一般報價單", "補助報價單", "對比報價單"]
+        quote_type_var = tk.StringVar(value=_QUOTE_TYPE_OPTIONS[0])
+        ttk.Combobox(cfg_row2, textvariable=quote_type_var,
+                     values=_QUOTE_TYPE_OPTIONS, state="readonly",
+                     width=14, font=FONT_S).pack(side="left", padx=(0, 6))
 
         def _update_valid_label(*_):
             try:
@@ -694,6 +703,225 @@ class _QuoteTab:
                                anchor="w", wraplength=620)
         p3_out_lbl.pack(fill="x", padx=10)
 
+        # ── 生成按鈕（放在歷史面板前，確保一定看得到）──────────
+        hist_lf = tk.LabelFrame(p3, text="📋  歷史相同組合報價", bg=BG, font=FONT_S)
+        hist_lf.pack(fill="x", padx=10, pady=(6, 2))
+
+        hist_cols = ("date", "customer", "total")
+        hist_tree = ttk.Treeview(hist_lf, columns=hist_cols,
+                                 show="headings", height=4)
+        hist_tree.heading("date",     text="日期")
+        hist_tree.heading("customer", text="客戶")
+        hist_tree.heading("total",    text="應收總金額（含稅）")
+        hist_tree.column("date",     width=100, anchor="center")
+        hist_tree.column("customer", width=200, anchor="w")
+        hist_tree.column("total",    width=140, anchor="e")
+        hist_tree.pack(fill="x", padx=4, pady=(4, 2))
+
+        hist_hint = tk.Label(hist_lf, text="查詢中…", bg=BG,
+                             font=("Microsoft JhengHei UI", 8), fg=GRAY, anchor="w")
+        hist_hint.pack(anchor="w", padx=6, pady=(0, 4))
+
+        def _show_hist_detail(event=None):
+            sel = hist_tree.selection()
+            if not sel:
+                return
+            quote_id = hist_tree.item(sel[0])["tags"][0]
+            from core.repository import get_quote
+            data = get_quote(int(quote_id))
+            if not data:
+                return
+            q, items_d = data["quote"], data["items"]
+
+            dlg = tk.Toplevel(self)
+            dlg.title(f"報價單明細 — {q['quote_no']}")
+            dlg.configure(bg=BG)
+            dlg.grab_set()
+            dlg.geometry("680x480")
+
+            info_lf = tk.LabelFrame(dlg, text="基本資訊", bg=BG, font=FONTB)
+            info_lf.pack(fill="x", padx=12, pady=(12, 4))
+            info_lf.columnconfigure(1, weight=1)
+            info_lf.columnconfigure(3, weight=1)
+
+            FONT_S2 = ("Microsoft JhengHei UI", 9)
+            for r, (l1, v1, l2, v2) in enumerate([
+                ("報價單號", q["quote_no"],       "日期",   q["date"]),
+                ("客戶",     q["customer"],        "聯絡人", q["contact"] or "—"),
+                ("電話",     q["phone"] or "—",   "總金額", f"{q['total']:,.0f}"),
+            ]):
+                tk.Label(info_lf, text=l1+"：", bg=BG, font=FONT_S2,
+                         fg=GRAY, anchor="e").grid(row=r, column=0, sticky="e", padx=(8,2), pady=3)
+                tk.Label(info_lf, text=v1, bg=BG, font=FONT_S2,
+                         anchor="w").grid(row=r, column=1, sticky="w", pady=3)
+                tk.Label(info_lf, text=l2+"：", bg=BG, font=FONT_S2,
+                         fg=GRAY, anchor="e").grid(row=r, column=2, sticky="e", padx=(16,2), pady=3)
+                tk.Label(info_lf, text=v2, bg=BG, font=FONT_S2,
+                         anchor="w").grid(row=r, column=3, sticky="w", pady=3)
+
+            item_lf = tk.LabelFrame(dlg, text="品項明細", bg=BG, font=FONTB)
+            item_lf.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+            icols = ("seq", "code", "name", "qty", "unit", "unit_price", "subtotal")
+            itree = ttk.Treeview(item_lf, columns=icols, show="headings", height=10)
+            itree.heading("seq",        text="#")
+            itree.heading("code",       text="型號")
+            itree.heading("name",       text="品名")
+            itree.heading("qty",        text="數量")
+            itree.heading("unit",       text="單位")
+            itree.heading("unit_price", text="單價")
+            itree.heading("subtotal",   text="小計")
+            itree.column("seq",        width=35,  anchor="center")
+            itree.column("code",       width=110, anchor="w")
+            itree.column("name",       width=150, anchor="w")
+            itree.column("qty",        width=50,  anchor="center")
+            itree.column("unit",       width=50,  anchor="center")
+            itree.column("unit_price", width=90,  anchor="e")
+            itree.column("subtotal",   width=90,  anchor="e")
+            isb = ttk.Scrollbar(item_lf, orient="vertical", command=itree.yview)
+            itree.configure(yscrollcommand=isb.set)
+            isb.pack(side="right", fill="y")
+            itree.pack(fill="both", expand=True, padx=4, pady=4)
+
+            for it in items_d:
+                itree.insert("", "end", values=(
+                    it["seq"], it["code"], it["name"],
+                    it["qty"], it["unit"],
+                    f"{it['unit_price']:,.0f}",
+                    f"{it['subtotal']:,.0f}",
+                ))
+
+            tk.Button(dlg, text="關閉", command=dlg.destroy,
+                      bg=GRAY, fg="white", relief="flat",
+                      font=FONT, padx=16, pady=4).pack(pady=(0, 10))
+
+        hist_tree.bind("<Double-1>", _show_hist_detail)
+
+        # ── 相似組合（多/少一個品號）────────────────────────
+        sim_lf = tk.LabelFrame(p3, text="🔍  相似組合報價（多或少一個品號）",
+                               bg=BG, font=FONT_S)
+        sim_lf.pack(fill="x", padx=10, pady=(4, 2))
+
+        sim_cols = ("similarity", "date", "customer", "total")
+        sim_tree = ttk.Treeview(sim_lf, columns=sim_cols,
+                                show="headings", height=4)
+        sim_tree.heading("similarity", text="差異")
+        sim_tree.heading("date",       text="日期")
+        sim_tree.heading("customer",   text="客戶")
+        sim_tree.heading("total",      text="應收總金額（含稅）")
+        sim_tree.column("similarity", width=120, anchor="center")
+        sim_tree.column("date",       width=100, anchor="center")
+        sim_tree.column("customer",   width=180, anchor="w")
+        sim_tree.column("total",      width=140, anchor="e")
+        sim_tree.pack(fill="x", padx=4, pady=(4, 2))
+
+        sim_hint = tk.Label(sim_lf, text="", bg=BG,
+                            font=("Microsoft JhengHei UI", 8), fg=GRAY, anchor="w")
+        sim_hint.pack(anchor="w", padx=6, pady=(0, 4))
+
+        def _show_sim_detail(event=None):
+            sel = sim_tree.selection()
+            if not sel:
+                return
+            quote_id = sim_tree.item(sel[0])["tags"][0]
+            from core.repository import get_quote
+            data = get_quote(int(quote_id))
+            if not data:
+                return
+            q, items_d = data["quote"], data["items"]
+            dlg = tk.Toplevel(self)
+            dlg.title(f"報價單明細 — {q['quote_no']}")
+            dlg.configure(bg=BG)
+            dlg.grab_set()
+            dlg.geometry("680x480")
+            FONT_S2 = ("Microsoft JhengHei UI", 9)
+            info_lf = tk.LabelFrame(dlg, text="基本資訊", bg=BG, font=FONTB)
+            info_lf.pack(fill="x", padx=12, pady=(12, 4))
+            info_lf.columnconfigure(1, weight=1)
+            info_lf.columnconfigure(3, weight=1)
+            for r, (l1, v1, l2, v2) in enumerate([
+                ("報價單號", q["quote_no"],     "日期",   q["date"]),
+                ("客戶",     q["customer"],      "聯絡人", q["contact"] or "—"),
+                ("電話",     q["phone"] or "—", "總金額", f"{q['total']:,.0f}"),
+            ]):
+                tk.Label(info_lf, text=l1+"：", bg=BG, font=FONT_S2, fg=GRAY,
+                         anchor="e").grid(row=r, column=0, sticky="e", padx=(8,2), pady=3)
+                tk.Label(info_lf, text=v1, bg=BG, font=FONT_S2,
+                         anchor="w").grid(row=r, column=1, sticky="w", pady=3)
+                tk.Label(info_lf, text=l2+"：", bg=BG, font=FONT_S2, fg=GRAY,
+                         anchor="e").grid(row=r, column=2, sticky="e", padx=(16,2), pady=3)
+                tk.Label(info_lf, text=v2, bg=BG, font=FONT_S2,
+                         anchor="w").grid(row=r, column=3, sticky="w", pady=3)
+            item_lf = tk.LabelFrame(dlg, text="品項明細", bg=BG, font=FONTB)
+            item_lf.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+            icols = ("seq", "code", "name", "qty", "unit", "unit_price", "subtotal")
+            itree = ttk.Treeview(item_lf, columns=icols, show="headings", height=10)
+            for col, hdr, w, anc in [
+                ("seq","#",35,"center"),("code","型號",110,"w"),("name","品名",150,"w"),
+                ("qty","數量",50,"center"),("unit","單位",50,"center"),
+                ("unit_price","單價",90,"e"),("subtotal","小計",90,"e"),
+            ]:
+                itree.heading(col, text=hdr)
+                itree.column(col, width=w, anchor=anc)
+            isb = ttk.Scrollbar(item_lf, orient="vertical", command=itree.yview)
+            itree.configure(yscrollcommand=isb.set)
+            isb.pack(side="right", fill="y")
+            itree.pack(fill="both", expand=True, padx=4, pady=4)
+            for it in items_d:
+                itree.insert("", "end", values=(
+                    it["seq"], it["code"], it["name"], it["qty"], it["unit"],
+                    f"{it['unit_price']:,.0f}", f"{it['subtotal']:,.0f}",
+                ))
+            tk.Button(dlg, text="關閉", command=dlg.destroy,
+                      bg=GRAY, fg="white", relief="flat",
+                      font=FONT, padx=16, pady=4).pack(pady=(0, 10))
+
+        sim_tree.bind("<Double-1>", _show_sim_detail)
+
+        def _refresh_history_panel(cart_items):
+            from core.repository import find_same_combination
+            codes = [it["product"]["code"] for it in cart_items
+                     if it.get("product", {}).get("code")]
+            hist_tree.delete(*hist_tree.get_children())
+            if not codes:
+                hist_hint.config(text="購物車無品項")
+                return
+            try:
+                results = find_same_combination(codes)
+            except Exception:
+                hist_hint.config(text="（資料庫未連線或尚無記錄）")
+                return
+            if not results:
+                hist_hint.config(text="無相同品號組合的歷史記錄")
+            else:
+                totals = []
+                for r in results:
+                    hist_tree.insert("", "end", values=(
+                        r["date"], r["customer"], f"${r['total']:,.0f}"
+                    ), tags=(r["id"],))
+                    totals.append(r["total"])
+                avg = sum(totals) / len(totals)
+                hist_hint.config(
+                    text=f"共 {len(results)} 筆  ｜  最近：${totals[0]:,.0f}  ｜  平均：${avg:,.0f}"
+                )
+
+            # ── 相似組合 ──────────────────────────────────
+            sim_tree.delete(*sim_tree.get_children())
+            try:
+                from core.repository import find_similar_combinations
+                sim_results = find_similar_combinations(codes)
+            except Exception:
+                sim_hint.config(text="（資料庫未連線或尚無記錄）")
+                return
+            if not sim_results:
+                sim_hint.config(text="無相似組合的歷史記錄")
+                return
+            for r in sim_results:
+                sim_tree.insert("", "end", values=(
+                    r["similarity"], r["date"], r["customer"], f"${r['total']:,.0f}"
+                ), tags=(r["id"],))
+            sim_hint.config(text=f"共 {len(sim_results)} 筆")
+
         def _build_confirm():
             conf_tree.delete(*conf_tree.get_children())
             items = [v for v in _cart.values() if v["qty"] > 0]
@@ -729,13 +957,26 @@ class _QuoteTab:
             _p3_cust_lbls["_quote_no"].config(  text=quote_no_var.get())
             _p3_cust_lbls["_quote_date"].config( text=date_entry.get_date().strftime("%Y/%m/%d"))
 
+            # ── 歷史相同組合對比 ──────────────────────────────
+            _refresh_history_panel(items)
+
         def _generate():
             from core.generator_quote import generate_quote_from_cart
             if not _cart:
                 messagebox.showwarning("購物車空白", "請先選取品項", parent=parent); return
             if not _customer.get("company"):
                 messagebox.showwarning("無客戶資料", "請先在步驟①選取 Trello 卡片", parent=parent); return
-            tpl_path = TEMPLATE_DIR / "template_quote.xlsx"
+            # 依報價單類型選擇範本
+            from core.generator_quote import (
+                QUOTE_TYPE_REGULAR, QUOTE_TYPE_ALLOWANCE, QUOTE_TYPE_COMPARE)
+            _type_map = {
+                "一般報價單": (QUOTE_TYPE_REGULAR,   "template_quote.xlsx"),
+                "補助報價單": (QUOTE_TYPE_ALLOWANCE, "template_quote_allowance.xlsx"),
+                "對比報價單": (QUOTE_TYPE_COMPARE,   "template_quote_compare.xlsx"),
+            }
+            _qt, _tpl_name = _type_map.get(
+                quote_type_var.get(), (QUOTE_TYPE_REGULAR, "template_quote.xlsx"))
+            tpl_path = TEMPLATE_DIR / _tpl_name
             if not tpl_path.exists():
                 messagebox.showerror("找不到範本", f"找不到 {tpl_path}", parent=parent); return
 
@@ -769,19 +1010,56 @@ class _QuoteTab:
                 out_path = generate_quote_from_cart(
                     _customer, cart_items, tpl_path, out_dir, quote_no, q_date,
                     operator=op_var.get().strip(),
-                    shipping=shipping_info)
+                    shipping=shipping_info,
+                    quote_type=_qt)
                 p3_out_lbl.config(text=f"✔  已生成：{out_path}", fg=GREEN)
+
+                # 詢問是否存入資料庫
+                if messagebox.askyesno("儲存記錄",
+                        "是否將此報價單儲存到資料庫記錄？", parent=parent):
+                    try:
+                        from core.repository import save_quote
+                        freight = 0.0
+                        if shipping_info and shipping_info.get("enabled"):
+                            freight = float(shipping_info.get("price", 0))
+                        subtotal = sum(
+                            it.get("qty", 1) * it.get("price", 0)
+                            for it in cart_items
+                        )
+                        save_quote(
+                            quote_no = quote_no,
+                            date     = q_date.strftime("%Y-%m-%d"),
+                            customer = _customer.get("company", ""),
+                            contact  = _customer.get("contact", ""),
+                            phone    = _customer.get("phone", ""),
+                            total    = round(subtotal + freight, 2),
+                            items    = [
+                                {
+                                    "seq":        i + 1,
+                                    "code":       it.get("code", ""),
+                                    "name":       it.get("name", ""),
+                                    "spec":       it.get("spec", ""),
+                                    "qty":        it.get("qty", 1),
+                                    "unit":       it.get("unit", ""),
+                                    "unit_price": it.get("price", 0),
+                                    "subtotal":   it.get("qty", 1) * it.get("price", 0),
+                                }
+                                for i, it in enumerate(cart_items)
+                            ],
+                        )
+                    except Exception as db_err:
+                        messagebox.showwarning(
+                            "資料庫寫入失敗",
+                            f"報價單已生成，但儲存記錄時發生錯誤：\n{db_err}",
+                            parent=parent,
+                        )
+
                 if messagebox.askyesno("完成",
                         f"報價單已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
                     os.startfile(str(out_path))
             except Exception as e:
                 p3_out_lbl.config(text=f"✘  {e}", fg="#c0392b")
                 messagebox.showerror("生成失敗", str(e), parent=parent)
-
-        gen_btn = tk.Button(p3, text="📄  生成報價單 .xlsx", command=_generate,
-                             bg=GREEN, fg="white", relief="flat",
-                             font=(FONTB[0], 12, "bold"), pady=8)
-        gen_btn.pack(fill="x", padx=10, pady=(0, 6))
 
         p3_back_btn = tk.Button(p3, text="← 返回選取品項",
                                  command=lambda: _go_step(2),
@@ -816,6 +1094,17 @@ class _QuoteTab:
                 cart_panel.pack(side="right", fill="y")
             if n == 3:
                 _build_confirm()
+                checkout_btn.config(
+                    text="📄  生成報價單 .xlsx",
+                    bg=GREEN,
+                    command=_generate,
+                )
+            else:
+                checkout_btn.config(
+                    text="確認報價內容 →",
+                    bg=BLUE,
+                    command=lambda: _go_step(3),
+                )
 
         checkout_btn.config(command=lambda: _go_step(3))
         _render_cart()
