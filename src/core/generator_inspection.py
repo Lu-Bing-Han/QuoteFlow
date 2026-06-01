@@ -316,10 +316,28 @@ def _generate_word_from_template(part_no: str, red_lines: list,
     dim_p.append(dim_r)
     ref_p.addnext(dim_p)
 
+    # ── ④-b 插入紅色「附配件 □電線/□充電器」在長寬高之後 ─────────
+    acc_p    = OxmlElement('w:p')
+    acc_r    = OxmlElement('w:r')
+    acc_rPr  = OxmlElement('w:rPr')
+    acc_clr  = OxmlElement('w:color')
+    acc_clr.set(qn('w:val'), 'C0392B')
+    acc_rPr.append(acc_clr)
+    acc_sz   = OxmlElement('w:sz')
+    acc_sz.set(qn('w:val'), '52')   # 26pt
+    acc_rPr.append(acc_sz)
+    acc_r.append(acc_rPr)
+    acc_t    = OxmlElement('w:t')
+    acc_t.text = '附配件 □電線/□充電器'
+    acc_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+    acc_r.append(acc_t)
+    acc_p.append(acc_r)
+    dim_p.addnext(acc_p)
+
     # ── ⑤ 調整緩衝空行，讓「插入項目 + size-28 空行」維持 8 行 ──────
     # 緩衝區共 10 行：前 8 行 size-28（可調整）、後 2 行保留不動
-    # 插入了 1 行長寬高(28pt) + N 行 ※(28pt)，需從前 8 行移除 N+1 行
-    n_to_remove = min(len(red_lines) + 1, 8)
+    # 插入了 1 行長寬高 + 1 行附配件 + N 行 ※，需從前 8 行移除 N+2 行
+    n_to_remove = min(len(red_lines) + 2, 8)
 
     in_zone        = False
     buffer_empties = []

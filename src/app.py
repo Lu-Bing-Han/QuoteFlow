@@ -8,4 +8,3 @@ from ui.app_core import App
 
 if __name__ == "__main__":
     App().mainloop()
- 

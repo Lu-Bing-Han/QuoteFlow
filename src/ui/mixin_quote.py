@@ -22,6 +22,50 @@ class _QuoteTab:
         MONO   = ("Consolas", 9)
         _TARGET_LIST = "1.待報價(evaluate)"
 
+        _PIC_DIR   = TEMPLATE_DIR / "Picture"
+        _img_cache: dict = {}   # code -> PhotoImage | None
+
+        def _load_prod_photo(code: str, category: str):
+            if code in _img_cache:
+                return _img_cache[code]
+            try:
+                from PIL import Image, ImageTk
+
+                def _open(f):
+                    _im = Image.open(f).convert("RGBA")
+                    _im.thumbnail((140, 105), Image.LANCZOS)
+                    return ImageTk.PhotoImage(_im)
+
+                # 1. 精確比對
+                for _ext in ("png", "jpg", "jpeg", "bmp"):
+                    _f = _PIC_DIR / category / f"{code}.{_ext}" if category else None
+                    if not (_f and _f.exists()):
+                        _m = list(_PIC_DIR.glob(f"*/{code}.{_ext}"))
+                        _f = _m[0] if _m else None
+                    if _f and _f.exists():
+                        _img_cache[code] = _open(_f)
+                        return _img_cache[code]
+
+                # 2. 前綴比對（最長 stem 優先，如 2HT > HT）
+                _search_dirs = ([_PIC_DIR / category] if category else []) + \
+                               [d for d in _PIC_DIR.iterdir() if d.is_dir()]
+                _best: tuple = ("", None)   # (stem, path)
+                for _d in _search_dirs:
+                    for _f in _d.iterdir():
+                        if _f.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp"):
+                            continue
+                        _stem = _f.stem
+                        if code.startswith(_stem) and len(_stem) > len(_best[0]):
+                            _best = (_stem, _f)
+                if _best[1]:
+                    _img_cache[code] = _open(_best[1])
+                    return _img_cache[code]
+
+            except Exception:
+                pass
+            _img_cache[code] = None
+            return None
+
         # ── 狀態 ────────────────────────────────────────────
         _all_cards:      list[dict]      = []
         _filtered_cards: list[dict]      = []
@@ -489,7 +533,7 @@ class _QuoteTab:
                 "fax":     _g("傳真"),
                 "address": _g("地址", "聯絡地址"),
                 "tax_id":  _g("統一編號", "统一編號", "统編", "統編"),
-                "email":   _g("電子信箱", "E-MAIL", "EMAIL"),
+                "email":   _g("電子信箱", "E-MAIL", "EMAIL", "E-Mail", "Mail"),
             })
             for key, sv in _cust_vars.items():
                 sv.set(_customer.get(key, ""))
@@ -546,6 +590,7 @@ class _QuoteTab:
                 b.config(bg=BLUE if c == cat else "#dee2e6",
                          fg="white" if c == cat else "#333")
             _render_products()
+            prod_cvs.yview_moveto(0)
 
         for cat in CATS:
             b = tk.Button(cat_bar, text=cat, font=FONT_S, relief="flat",
@@ -592,6 +637,10 @@ class _QuoteTab:
                                highlightbackground=bdr, highlightthickness=1)
                 cf2.grid(row=row_i, column=col, padx=4, pady=4, sticky="nsew")
                 prod_inner.columnconfigure(col, weight=1)
+
+                _ph = _load_prod_photo(prod["code"], prod.get("category", ""))
+                if _ph:
+                    tk.Label(cf2, image=_ph, bg=card_bg).pack(pady=(6, 2))
 
                 tk.Label(cf2, text=prod["code"], bg=card_bg, fg=GRAY,
                          font=MONO, anchor="w").pack(fill="x", padx=8, pady=(6, 0))
@@ -981,12 +1030,13 @@ class _QuoteTab:
                 messagebox.showerror("找不到範本", f"找不到 {tpl_path}", parent=parent); return
 
             cart_items = [
-                {**{"code":  v["product"]["code"],
-                    "name":  v["product"]["name"],
-                    "spec":  v["product"].get("spec", ""),
-                    "unit":  v["product"]["unit"],
-                    "qty":   v["qty"],
-                    "price": v["price"]}}
+                {**{"code":     v["product"]["code"],
+                    "name":     v["product"]["name"],
+                    "spec":     v["product"].get("spec", ""),
+                    "unit":     v["product"]["unit"],
+                    "qty":      v["qty"],
+                    "price":    v["price"],
+                    "category": v["product"].get("category", "")}}
                 for v in _cart.values() if v["qty"] > 0
             ]
             q_date   = date_entry.get_date()
@@ -1011,7 +1061,8 @@ class _QuoteTab:
                     _customer, cart_items, tpl_path, out_dir, quote_no, q_date,
                     operator=op_var.get().strip(),
                     shipping=shipping_info,
-                    quote_type=_qt)
+                    quote_type=_qt,
+                    card_title=_card[0].get("name", "") if _card[0] else "")
                 p3_out_lbl.config(text=f"✔  已生成：{out_path}", fg=GREEN)
 
                 # 詢問是否存入資料庫

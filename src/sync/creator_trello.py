@@ -84,9 +84,10 @@ def get_sheet_names(excel_path: Path) -> list[str]:
 
 
 def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[dict]:
-    """讀 Excel：B欄=標題，C=公司名，D=聯絡人，F=電話/手機，G=信箱，H=統編。
+    """讀 Excel：B欄=標題，C=公司名，D=聯絡人，F=電話/手機，G=傳真，H=地址，
+    I=電子信箱，J=統編，K=手寫備註/產品需求。
 
-    回傳 list of {"row": int, "title": str, "desc": str}
+    回傳 list of {"row": int, "seq": str, "title": str, "desc": str, "notes": str}
     """
     wb = openpyxl.load_workbook(str(excel_path), data_only=True)
     ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb.active
@@ -100,14 +101,15 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
         if not title:
             continue
 
-        a_val = str(row[0].value or "").strip()   # A欄 — 序號
-        c_val = str(row[2].value or "").strip()   # 公司名
-        d_val = str(row[3].value or "").strip()   # 聯絡人
-        f_val = row[5].value                       # 電話/手機
-        g_val = str(row[6].value or "").strip()   # 傳真
-        h_val = str(row[7].value or "").strip()   # 地址
-        i_val = str(row[8].value or "").strip()   # 電子信箱
-        j_val = str(row[9].value or "").strip()   # 統一編號
+        a_val = str(row[0].value or "").strip()                            # A — 序號
+        c_val = str(row[2].value or "").strip()                            # C — 公司名
+        d_val = str(row[3].value or "").strip()                            # D — 聯絡人
+        f_val = row[5].value                                               # F — 電話/手機
+        g_val = str(row[6].value or "").strip()                            # G — 傳真
+        h_val = str(row[7].value or "").strip()                            # H — 地址
+        i_val = str(row[8].value or "").strip()                            # I — 電子信箱
+        j_val = str(row[9].value or "").strip()                            # J — 統一編號
+        k_val = str(row[10].value or "").strip() if len(row) > 10 else ""  # K — 備註/需求
 
         mobile, phone, ext = _parse_phones(f_val)
         phone_display = f"{phone}#{ext}" if ext else phone
@@ -122,8 +124,8 @@ def read_excel_cards(excel_path: Path, sheet_name: str | None = None) -> list[di
             f"統一編號：{j_val}\n"
             f"地址：{h_val}"
         )
-
-        cards.append({"row": row_idx, "seq": a_val, "title": title, "desc": desc})
+        cards.append({"row": row_idx, "seq": a_val, "title": title,
+                      "desc": desc, "notes": k_val})
 
     wb.close()
     return cards

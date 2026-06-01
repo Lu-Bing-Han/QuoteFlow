@@ -252,11 +252,12 @@ class App(
         dlg = tk.Toplevel(self)
         dlg.title("⚙  路徑與人員設定")
         dlg.configure(bg=BG)
-        dlg.resizable(True, False)
+        dlg.resizable(True, True)
         dlg.grab_set()
         dlg.update_idletasks()
         sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
-        dlg.geometry(f"720x620+{(sw-720)//2}+{(sh-620)//2}")
+        h = min(720, sh - 80)
+        dlg.geometry(f"720x{h}+{(sw-720)//2}+{(sh-h)//2}")
 
         # ── 資料庫路徑設定 ────────────────────────────────────
         db_lf = tk.LabelFrame(dlg, text="資料庫設定", bg=BG, font=FONTB)

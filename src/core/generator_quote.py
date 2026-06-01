@@ -222,7 +222,7 @@ def generate_quote(
         # 統一編號：繁體/簡體「統」，或縮寫「统編」
         "統一編號":  _get("統一編號", "统一編號", "统編", "統編"),
         # EMAIL：可能叫「電子信箱」或直接寫「E-MAIL」
-        "EMAIL":     _get("電子信箱", "E-MAIL", "EMAIL", "E-Mail"),
+        "EMAIL":     _get("電子信箱", "E-MAIL", "EMAIL", "E-Mail", "Mail"),
         "報價日期":  quote_date.strftime("%Y/%m/%d"),
         "有效日期":  valid_date.strftime("%Y/%m/%d"),
         "報價單號":  quote_no,
@@ -322,7 +322,8 @@ PRODUCT_ROWS: dict[str, tuple[str, int, int]] = {
     # ── APS 不鏽鋼升降台車（Sheet: APS）────────────────────────
     "APS-10":  ("APS",  2, 12),  # 11 行
     "APS-20":  ("APS", 14, 24),  # 11 行
-    "APS-50":  ("APS", 26, 38),  # 13 行
+    "APS-25":  ("APS", 26, 36),  # 11 行
+    "APS-50":  ("APS", 38, 48),  # 11 行
     # ── APT 系列（Sheet: APT）───────────────────────────────────
     "APT15F":  ("APT",  2, 24),  # 23 行
     "APT15L":  ("APT", 26, 48),  # 23 行
@@ -626,6 +627,7 @@ def generate_quote_from_cart(
     operator: str = "",
     shipping: dict | None = None,
     quote_type: str = QUOTE_TYPE_REGULAR,
+    card_title: str = "",
 ) -> Path:
     """將購物車品項填入 template_quote.xlsx，生成完整報價單。
 
@@ -821,22 +823,31 @@ def generate_quote_from_cart(
             except Exception:
                 pass
 
-        # ── 插入產品圖片（Picture/{品號}.png） ────────────────
-        # 產品圖片暫時用原始邏輯定位（G欄、序號列+3）
-        # 印章圖（template 預埋）會在所有品項插完後統一重定位到 footer 備註:
-        pic_dir = template_path.parent / "Picture"
+        # ── 插入產品圖片（Picture/{系列}/{品號}.{ext}） ──────────
+        pic_dir  = template_path.parent / "Picture"
+        category = item.get("category", "")
+        _pic_file = None
         for _ext in ("png", "jpg", "jpeg", "bmp"):
-            pic_file = pic_dir / f"{code}.{_ext}"
-            if pic_file.exists():
-                try:
-                    _img = _XlImage(str(pic_file))
-                    _img.width  = 205
-                    _img.height = 162
-                    _img.anchor = f"{_col_letter(7)}{hrow + 3}"
-                    ws.add_image(_img)
-                except Exception:
-                    pass
+            # 優先：Picture/{category}/{code}.{ext}
+            if category:
+                _f = pic_dir / category / f"{code}.{_ext}"
+                if _f.exists():
+                    _pic_file = _f
+                    break
+            # 兜底：glob 掃全部子資料夾
+            _matches = list(pic_dir.glob(f"*/{code}.{_ext}"))
+            if _matches:
+                _pic_file = _matches[0]
                 break
+        if _pic_file:
+            try:
+                _img = _XlImage(str(_pic_file))
+                _img.width  = 205
+                _img.height = 162
+                _img.anchor = f"{_col_letter(7)}{hrow + 3}"
+                ws.add_image(_img)
+            except Exception:
+                pass
 
         insert_pos += block_rows
 
@@ -1010,8 +1021,15 @@ def generate_quote_from_cart(
     # ── 11. 儲存 ─────────────────────────────────────────────
     output_dir.mkdir(parents=True, exist_ok=True)
     company  = customer.get("company", "客戶")
-    safe     = re.sub(r'[\\/:*?"<>|]', "_", company).strip() or "客戶"
-    out_path = output_dir / f"報價單_{safe}.xlsx"
+    contact  = customer.get("contact", "")
+    codes    = "+".join(item.get("code", "") for item in cart_items if item.get("code"))
+    roc_date = f"{quote_date.year - 1911}{quote_date.month:02d}{quote_date.day:02d}"
+    # 從卡片標題取括號（含前方空白），例如 " (台中大雅)" 或 "(高雄仁武)"
+    _bm      = re.search(r'\s*\([^)]+\)', card_title) if card_title else None
+    _bracket = _bm.group(0) if _bm else ""
+    _raw     = f"報價單-{company}{_bracket} {contact} {codes}-{roc_date}"
+    safe     = re.sub(r'[\\/:*?"<>|]', "_", _raw).strip()
+    out_path = output_dir / f"{safe}.xlsx"
     wb.save(str(out_path))
     wb.close()
     if wb_ap:

@@ -205,8 +205,8 @@ class _TrelloTab:
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
-        _HEADERS = ["序號", "標題", "描述"]
-        _EMPTY   = ["", "", ""]
+        _HEADERS = ["序號", "標題", "描述", "備註/需求"]
+        _EMPTY   = ["", "", "", ""]
 
         # ── 頂部：來源 Excel（左）+ 使用說明（右）──────────
         top_row = tk.Frame(parent, bg=BG)
@@ -285,7 +285,7 @@ class _TrelloTab:
                       data=[_EMPTY[:] for _ in range(10)],
                       column_width=200,
                       row_height=28)
-        sheet.set_column_widths([70, 300, 500])
+        sheet.set_column_widths([70, 300, 420, 200])
         sheet.enable_bindings()
         sheet.pack(fill="both", expand=True)
 
@@ -298,7 +298,7 @@ class _TrelloTab:
                 filtered = [c for c in _all_data if str(c["seq"]) in keys]
             else:
                 filtered = _all_data
-            rows = [[c["seq"], c["title"], c["desc"]] for c in filtered]
+            rows = [[c["seq"], c["title"], c["desc"], c.get("notes", "")] for c in filtered]
             while len(rows) < len(filtered) + 5:
                 rows.append(_EMPTY[:])
             sheet.data = rows
@@ -351,8 +351,11 @@ class _TrelloTab:
             for row in rows:
                 title = str(row[1]).strip() if len(row) > 1 else ""
                 desc  = str(row[2]).strip() if len(row) > 2 else ""
+                notes = str(row[3]).strip() if len(row) > 3 else ""
                 if not title:
                     continue
+                if notes:
+                    desc = desc + f"\n需求：\n{notes}"
                 cards.append({"title": title, "desc": desc})
 
             if not cards:
