@@ -1018,7 +1018,96 @@ def generate_quote_from_cart(
                 _parts.append(_TextBlock(_base, _after))
             _c.value = _CellRichText(*_parts)
 
-    # ── 11. 儲存 ─────────────────────────────────────────────
+    # ── 11. 成本建議售價表（K11 起） ─────────────────────────
+    _cost_path = template_path.parent / "template_cost.xlsx"
+    if _cost_path.exists():
+        try:
+            from openpyxl.styles import PatternFill as _PFill
+            _cost_wb = openpyxl.load_workbook(str(_cost_path), data_only=True)
+
+            def _cnorm(c):
+                return re.sub(r'[-\s]', '', str(c or '')).upper()
+
+            # 建立每個工作表的標題列與品號查找表
+            _sh_hdr: dict[str, list] = {}
+            _sh_lkp: dict[str, dict] = {}
+            for _sn in _cost_wb.sheetnames:
+                _sw = _cost_wb[_sn]
+                _rows = list(_sw.iter_rows(min_row=1, max_col=5, values_only=True))
+                if not _rows:
+                    continue
+                _sh_hdr[_sn] = list(_rows[0])
+                _lkp = {}
+                for _r in _rows[1:]:
+                    if _r[0] is not None:
+                        _lkp[_cnorm(str(_r[0]))] = list(_r)
+                _sh_lkp[_sn] = _lkp
+            _cost_wb.close()
+
+            # 比對每個品項
+            _matched: list[tuple[str, list]] = []
+            for _it in cart_items:
+                _nc = _cnorm(_it.get('code', ''))
+                _cat = _it.get('category', '')
+                _order = ([_cat] if _cat in _sh_lkp else []) + \
+                         [s for s in _sh_lkp if s != _cat]
+                for _sn in _order:
+                    if _nc in _sh_lkp.get(_sn, {}):
+                        _matched.append((_sn, _sh_lkp[_sn][_nc]))
+                        break
+
+            if _matched:
+                _CROW, _CCOL = 11, 11   # K11
+                _n_rows = 1 + len(_matched)   # 標題 + 資料列數
+                _n_cols = 5
+
+                _yellow   = _PFill(fill_type='solid', fgColor='FFFF00')
+                _font_hdr = Font(name='Microsoft JhengHei', bold=True)
+                _font_dat = Font(name='Microsoft JhengHei')
+                _thick    = Side(style='medium')
+                _thin     = Side(style='thin')
+                _price_fmt = '"NT$"#,##0'
+
+                # 哪些欄（0-indexed）的值是數字（建議售價等）
+                # 第0欄=品號, 第1欄=台車型號, 第2-4欄=價格
+                _price_cols = {2, 3, 4}
+
+                for _ri in range(_n_rows):
+                    _row_abs = _CROW + _ri
+                    _is_hdr  = (_ri == 0)
+                    _vals    = _sh_hdr.get(_matched[0][0], [])[:5] if _is_hdr \
+                               else _matched[_ri - 1][1][:5]
+
+                    for _j in range(_n_cols):
+                        _c = ws.cell(row=_row_abs, column=_CCOL + _j)
+                        _v = _vals[_j] if _j < len(_vals) else None
+
+                        # 值
+                        if _v is not None:
+                            _c.value = _v
+
+                        # 字型
+                        _c.font = _font_hdr if _is_hdr else _font_dat
+
+                        # 標題背景
+                        if _is_hdr:
+                            _c.fill = _yellow
+
+                        # 數字格式
+                        if not _is_hdr and _j in _price_cols and isinstance(_v, (int, float)):
+                            _c.number_format = _price_fmt
+
+                        # 框線
+                        _top    = _thick if _ri == 0            else _thin
+                        _bottom = _thick if _ri == _n_rows - 1  else _thin
+                        _left   = _thick if _j == 0             else _thin
+                        _right  = _thick if _j == _n_cols - 1   else _thin
+                        _c.border = Border(top=_top, bottom=_bottom,
+                                           left=_left, right=_right)
+        except Exception:
+            pass
+
+    # ── 12. 儲存 ─────────────────────────────────────────────
     output_dir.mkdir(parents=True, exist_ok=True)
     company  = customer.get("company", "客戶")
     contact  = customer.get("contact", "")

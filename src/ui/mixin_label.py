@@ -4,8 +4,10 @@ mixin_label.py — 標籤生成頁籤 mixin
 import os
 import tkinter as tk
 from tkinter import messagebox, ttk
+import customtkinter as ctk
 from datetime import datetime
 from pathlib import Path
+from ui.app_core import _mk_lf
 
 
 class _LabelTab:
@@ -15,18 +17,19 @@ class _LabelTab:
         from tksheet import Sheet
         import re as _re
 
+        GRAY = "#5d6d7e"
+
         # 模板選擇
-        tpl_frame = tk.Frame(parent, bg=BG)
+        tpl_frame = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
         tpl_frame.pack(fill="x", padx=12, pady=(10, 0))
-        tk.Label(tpl_frame, text="標籤樣式：", bg=BG, font=FONTB).pack(side="left")
+        ctk.CTkLabel(tpl_frame, text="標籤樣式：", fg_color="transparent",
+                      font=FONTB, text_color="#2c3e50").pack(side="left")
         _tpl_var = tk.StringVar(value="銀標")
-        _tpl_cb  = ttk.Combobox(tpl_frame, textvariable=_tpl_var,
-                                 values=["銀標", "APT標", "無公司標", "上銀標"],
-                                 state="readonly", font=FONT, width=10)
+        _tpl_cb  = ctk.CTkComboBox(tpl_frame, variable=_tpl_var,
+                                    values=["銀標", "APT標", "無公司標", "上銀標"],
+                                    font=FONT, width=120, height=28)
         _tpl_cb.pack(side="left", padx=(8, 0))
 
-        # 欄位索引：0=型號 1=荷重 2=序號 3=機台尺寸 4=機台重量 5=出廠年份
-        #           6=供應商代碼 7=機台序號 8=訂單編號 9=收貨人
         _HEADERS = ["型號", "荷重", "序號", "機台尺寸", "機台重量", "出廠年份",
                     "供應商代碼", "機台序號", "訂單編號", "收貨人"]
         _EMPTY   = [""] * len(_HEADERS)
@@ -38,8 +41,8 @@ class _LabelTab:
         }
         _ALL_COLS = list(range(len(_HEADERS)))
 
-        tf = tk.LabelFrame(parent, text="標籤資料", bg=BG, font=FONTB)
-        tf.pack(fill="both", expand=True, padx=12, pady=(10, 4))
+        tf_outer, tf = _mk_lf(parent, "標籤資料", BG, FONTB)
+        tf_outer.pack(fill="both", expand=True, padx=12, pady=(10, 4))
 
         sheet = Sheet(tf,
                       headers=_HEADERS,
@@ -117,23 +120,27 @@ class _LabelTab:
             sheet.data = data
 
         # 操作按鈕
-        bb = tk.Frame(parent, bg=BG)
+        bb = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
         bb.pack(fill="x", padx=12, pady=(0, 4))
-        tk.Button(bb, text="從報價單讀入", command=_load_from_quote,
-                  bg="#2e86c1", fg="white", relief="flat",
-                  font=FONT, padx=8).pack(side="left", padx=(0, 6))
-        tk.Button(bb, text="＋ 新增列",
-                  command=lambda: sheet.insert_rows(number=1),
-                  bg="#27ae60", fg="white", relief="flat",
-                  font=FONT, padx=8).pack(side="left", padx=(0, 6))
-        tk.Button(bb, text="－ 刪除列",
-                  command=lambda: [sheet.delete_rows(row=r)
-                                   for r in sorted(sheet.get_selected_rows(), reverse=True)],
-                  bg="#c0392b", fg="white", relief="flat",
-                  font=FONT, padx=8).pack(side="left", padx=(0, 6))
-        tk.Button(bb, text="流水號↓", command=_autofill_serial,
-                  bg="#7d3c98", fg="white", relief="flat",
-                  font=FONT, padx=8).pack(side="left")
+        ctk.CTkButton(bb, text="從報價單讀入", command=_load_from_quote,
+                       fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
+                       font=FONT, width=110, height=32, corner_radius=6
+                       ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(bb, text="＋ 新增列",
+                       command=lambda: sheet.insert_rows(number=1),
+                       fg_color="#27ae60", hover_color="#1e8449", text_color="white",
+                       font=FONT, width=90, height=32, corner_radius=6
+                       ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(bb, text="－ 刪除列",
+                       command=lambda: [sheet.delete_rows(row=r)
+                                        for r in sorted(sheet.get_selected_rows(), reverse=True)],
+                       fg_color="#c0392b", hover_color="#a93226", text_color="white",
+                       font=FONT, width=90, height=32, corner_radius=6
+                       ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(bb, text="流水號↓", command=_autofill_serial,
+                       fg_color="#7d3c98", hover_color="#6c3483", text_color="white",
+                       font=FONT, width=90, height=32, corner_radius=6
+                       ).pack(side="left")
 
         # 生成按鈕
         def _generate():
@@ -170,8 +177,9 @@ class _LabelTab:
             except Exception as e:
                 messagebox.showerror("生成失敗", str(e), parent=parent)
 
-        gf = tk.Frame(parent, bg=BG, pady=8)
-        gf.pack(fill="x", padx=12)
-        tk.Button(gf, text="🖨  生成標籤 PDF", command=_generate,
-                  bg="#1e8449", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 12, "bold"), pady=8).pack(fill="x")
+        gf = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
+        gf.pack(fill="x", padx=12, pady=8)
+        ctk.CTkButton(gf, text="🖨  生成標籤 PDF", command=_generate,
+                       fg_color="#1e8449", hover_color="#176a3a", text_color="white",
+                       font=("Microsoft JhengHei UI", 12, "bold"),
+                       height=44, corner_radius=8).pack(fill="x")

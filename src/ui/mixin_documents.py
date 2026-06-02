@@ -4,8 +4,10 @@ mixin_documents.py — 出貨單、驗機單、維修單、維修掛件 頁籤 m
 import os, sys, subprocess
 import tkinter as tk
 from tkinter import messagebox, ttk
+import customtkinter as ctk
 from datetime import datetime
 from pathlib import Path
+from ui.app_core import _mk_lf
 
 
 class _DocumentsTab:
@@ -13,28 +15,31 @@ class _DocumentsTab:
 
     # ── Tab 1：出貨單 ─────────────────────────────────────────
     def _build_tab_shipping(self, parent, PAD, FONT, FONTB, BG):
-        # 生成按鈕（先 pack bottom 確保不被擠掉）
-        bb = tk.Frame(parent, bg=BG, pady=8)
-        bb.pack(side="bottom", fill="x", padx=12)
-        tk.Button(bb, text="＋ 新增", command=self._add_row,
-                  bg="#27ae60", fg="white", relief="flat",
-                  font=FONT, padx=10, pady=3).pack(side="left", padx=(0, 6))
-        tk.Button(bb, text="－ 刪除", command=self._del_row,
-                  bg="#c0392b", fg="white", relief="flat",
-                  font=FONT, padx=10, pady=3).pack(side="left")
-        tk.Button(bb, text="⬇  生成出貨單", command=self._generate,
-                  bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 11, "bold"),
-                  padx=16, pady=6).pack(side="right")
+        GRAY = "#5d6d7e"
 
-        # 欄位區
-        mid = tk.Frame(parent, bg=BG)
+        bb = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
+        bb.pack(side="bottom", fill="x", padx=12, pady=8)
+        ctk.CTkButton(bb, text="＋ 新增", command=self._add_row,
+                       fg_color="#27ae60", hover_color="#1e8449", text_color="white",
+                       font=FONT, width=90, height=34, corner_radius=6
+                       ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(bb, text="－ 刪除", command=self._del_row,
+                       fg_color="#c0392b", hover_color="#a93226", text_color="white",
+                       font=FONT, width=90, height=34, corner_radius=6
+                       ).pack(side="left")
+        ctk.CTkButton(bb, text="⬇  生成出貨單", command=self._generate,
+                       fg_color="#1a5276", hover_color="#154360", text_color="white",
+                       font=("Microsoft JhengHei UI", 11, "bold"),
+                       width=160, height=34, corner_radius=6
+                       ).pack(side="right")
+
+        mid = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
         mid.pack(fill="x", padx=12, pady=6)
         mid.columnconfigure(0, weight=1)
         mid.columnconfigure(1, weight=1)
 
-        lf = tk.LabelFrame(mid, text="從報價單讀入", bg=BG, font=FONTB)
-        lf.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        lf_outer, lf = _mk_lf(mid, "從報價單讀入", BG, FONTB)
+        lf_outer.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         lf.columnconfigure(1, weight=1)
 
         self._read_vars = {}
@@ -43,15 +48,17 @@ class _DocumentsTab:
             ("聯絡人",   "contact"),  ("地址",     "address"),
             ("報價單號", "quote_no"), ("報價日期", "quote_date"),
         ]):
-            tk.Label(lf, text=label + "：", bg=BG, anchor="w", font=FONT
-                     ).grid(row=i, column=0, sticky="w", **PAD)
+            ctk.CTkLabel(lf, text=label + "：", fg_color="transparent",
+                          anchor="w", font=FONT, text_color="#2c3e50"
+                          ).grid(row=i, column=0, sticky="w", **PAD)
             var = tk.StringVar(value="—")
-            tk.Entry(lf, textvariable=var, font=FONT
-                     ).grid(row=i, column=1, sticky="ew", **PAD)
+            ctk.CTkEntry(lf, textvariable=var, font=FONT,
+                          corner_radius=4, border_width=1
+                          ).grid(row=i, column=1, sticky="ew", **PAD)
             self._read_vars[key] = var
 
-        rf = tk.LabelFrame(mid, text="補填欄位", bg=BG, font=FONTB)
-        rf.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        rf_outer, rf = _mk_lf(mid, "補填欄位", BG, FONTB)
+        rf_outer.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
         rf.columnconfigure(1, weight=1)
 
         self._fill_vars = {}
@@ -60,16 +67,19 @@ class _DocumentsTab:
             ("銷貨單號", "sale_no",   ""),
             ("附註",     "note",      ""),
         ]):
-            tk.Label(rf, text=label + "：", bg=BG, anchor="w", font=FONT
-                     ).grid(row=i, column=0, sticky="w", **PAD)
+            ctk.CTkLabel(rf, text=label + "：", fg_color="transparent",
+                          anchor="w", font=FONT, text_color="#2c3e50"
+                          ).grid(row=i, column=0, sticky="w", **PAD)
             var = tk.StringVar(value=default)
-            tk.Entry(rf, textvariable=var, font=FONT
-                     ).grid(row=i, column=1, sticky="ew", **PAD)
+            ctk.CTkEntry(rf, textvariable=var, font=FONT,
+                          corner_radius=4, border_width=1
+                          ).grid(row=i, column=1, sticky="ew", **PAD)
             self._fill_vars[key] = var
 
-        tk.Label(rf, text="製表人員：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=3, column=0, sticky="w", **PAD)
-        op_f = tk.Frame(rf, bg=BG)
+        ctk.CTkLabel(rf, text="製表人員：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=3, column=0, sticky="w", **PAD)
+        op_f = ctk.CTkFrame(rf, fg_color="transparent", corner_radius=0)
         op_f.grid(row=3, column=1, sticky="ew", **PAD)
         self._operator_var = tk.StringVar()
         self._operator_cb  = ttk.Combobox(op_f, textvariable=self._operator_var,
@@ -78,27 +88,30 @@ class _DocumentsTab:
         if self._config["operators"]:
             self._operator_var.set(self._config["operators"][0])
         self._operator_cb.pack(side="left")
-        tk.Button(op_f, text="＋", command=self._add_operator,
-                  bg="#27ae60", fg="white", relief="flat",
-                  font=FONT, width=3).pack(side="left", padx=(4, 0))
-        tk.Button(op_f, text="－", command=self._del_operator,
-                  bg="#c0392b", fg="white", relief="flat",
-                  font=FONT, width=3).pack(side="left", padx=(2, 0))
+        ctk.CTkButton(op_f, text="＋", command=self._add_operator,
+                       fg_color="#27ae60", hover_color="#1e8449", text_color="white",
+                       font=FONT, width=28, height=28, corner_radius=4
+                       ).pack(side="left", padx=(4, 0))
+        ctk.CTkButton(op_f, text="－", command=self._del_operator,
+                       fg_color="#c0392b", hover_color="#a93226", text_color="white",
+                       font=FONT, width=28, height=28, corner_radius=4
+                       ).pack(side="left", padx=(2, 0))
 
-        tk.Label(rf, text="發票方式：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=4, column=0, sticky="w", **PAD)
-        inv_f = tk.Frame(rf, bg=BG)
+        ctk.CTkLabel(rf, text="發票方式：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=4, column=0, sticky="w", **PAD)
+        inv_f = ctk.CTkFrame(rf, fg_color="transparent", corner_radius=0)
         inv_f.grid(row=4, column=1, sticky="w", **PAD)
         self._invoice_var = tk.StringVar(value="尚未確認")
         for lbl, val in [("尚未確認", "尚未確認"), ("隨貨", "隨貨"), ("直寄", "直寄")]:
-            tk.Radiobutton(inv_f, text=lbl, variable=self._invoice_var,
-                           value=val, bg=BG, font=FONT,
-                           activebackground=BG).pack(side="left", padx=(0, 8))
+            ctk.CTkRadioButton(inv_f, text=lbl, variable=self._invoice_var,
+                                value=val, font=FONT,
+                                fg_color="#1a5276", hover_color="#2e6da4"
+                                ).pack(side="left", padx=(0, 8))
 
         # 品項列表
-        tf = tk.LabelFrame(parent, text="品項列表（雙擊儲存格可編輯）",
-                           bg=BG, font=FONTB)
-        tf.pack(fill="both", expand=True, padx=12, pady=4)
+        tf_outer, tf = _mk_lf(parent, "品項列表（雙擊儲存格可編輯）", BG, FONTB)
+        tf_outer.pack(fill="both", expand=True, padx=12, pady=4)
 
         cols     = ("seq", "name", "qty", "unit", "unit_price", "subtotal")
         col_lbls = ("序號", "品名 / 規格", "數量", "單位", "單價", "小計")
@@ -122,68 +135,79 @@ class _DocumentsTab:
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
-        info = tk.LabelFrame(parent, text="說明", bg=BG, font=FONTB)
-        info.pack(fill="x", padx=12, pady=(12, 4))
-        tk.Label(info, text="載入報價單後，點擊下方按鈕自動生成驗機單 Excel 及 Word。",
-                 bg=BG, font=FONT, fg=GRAY).pack(padx=12, pady=8, anchor="w")
+        info_outer, info = _mk_lf(parent, "說明", BG, FONTB)
+        info_outer.pack(fill="x", padx=12, pady=(12, 4))
+        ctk.CTkLabel(info,
+                      text="載入報價單後，點擊下方按鈕自動生成驗機單 Excel 及 Word。",
+                      fg_color="transparent", font=FONT, text_color=GRAY
+                      ).pack(padx=12, pady=8, anchor="w")
 
-        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf = ctk.CTkFrame(parent, fg_color="#e8ecf0", corner_radius=6)
         pf.pack(fill="x", padx=12, pady=4)
-        tk.Label(pf, text="輸出路徑：", bg="#e8ecf0", font=FONT_S, fg=GRAY,
-                 anchor="w", width=12).pack(side="left", padx=8, pady=6)
-        tk.Label(pf, text="（依⚙路徑設定）",
-                 bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left", pady=6)
+        ctk.CTkLabel(pf, text="輸出路徑：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY, anchor="w", width=96
+                      ).pack(side="left", padx=8, pady=6)
+        ctk.CTkLabel(pf, text="（依⚙路徑設定）",
+                      fg_color="transparent", font=FONT_S, text_color=GRAY
+                      ).pack(side="left", pady=6)
 
-        bb = tk.Frame(parent, bg=BG, pady=8)
-        bb.pack(side="bottom", fill="x", padx=12)
-        tk.Button(bb, text="🔍  生成驗機單", command=self._generate_inspection,
-                  bg="#6c3483", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 12, "bold"), pady=10).pack(fill="x")
+        bb = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
+        bb.pack(side="bottom", fill="x", padx=12, pady=8)
+        ctk.CTkButton(bb, text="🔍  生成驗機單", command=self._generate_inspection,
+                       fg_color="#6c3483", hover_color="#5b2c6f", text_color="white",
+                       font=("Microsoft JhengHei UI", 12, "bold"),
+                       height=44, corner_radius=8).pack(fill="x")
 
     # ── Tab 3：維修單 ─────────────────────────────────────────
     def _build_tab_fix(self, parent, PAD, FONT, FONTB, BG):
         GRAY   = "#5d6d7e"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
-        info = tk.LabelFrame(parent, text="說明", bg=BG, font=FONTB)
-        info.pack(fill="x", padx=12, pady=(12, 4))
-        tk.Label(info, text="載入報價單後，點擊下方按鈕生成維修單。",
-                 bg=BG, font=FONT, fg=GRAY).pack(padx=12, pady=8, anchor="w")
+        info_outer, info = _mk_lf(parent, "說明", BG, FONTB)
+        info_outer.pack(fill="x", padx=12, pady=(12, 4))
+        ctk.CTkLabel(info,
+                      text="載入報價單後，點擊下方按鈕生成維修單。",
+                      fg_color="transparent", font=FONT, text_color=GRAY
+                      ).pack(padx=12, pady=8, anchor="w")
 
-        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf = ctk.CTkFrame(parent, fg_color="#e8ecf0", corner_radius=6)
         pf.pack(fill="x", padx=12, pady=4)
-        row = tk.Frame(pf, bg="#e8ecf0")
+        row = ctk.CTkFrame(pf, fg_color="transparent", corner_radius=0)
         row.pack(fill="x")
-        tk.Label(row, text="輸出路徑：", bg="#e8ecf0", font=FONT_S,
-                 fg=GRAY, anchor="w", width=10).pack(side="left", padx=8)
-        tk.Label(row, text="（依⚙路徑設定）",
-                 bg="#e8ecf0", font=FONT_S, fg=GRAY).pack(side="left")
+        ctk.CTkLabel(row, text="輸出路徑：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY, anchor="w", width=80
+                      ).pack(side="left", padx=8)
+        ctk.CTkLabel(row, text="（依⚙路徑設定）",
+                      fg_color="transparent", font=FONT_S, text_color=GRAY
+                      ).pack(side="left")
 
-        bb = tk.Frame(parent, bg=BG, pady=8)
-        bb.pack(side="bottom", fill="x", padx=12)
-        tk.Button(bb, text="🔧  生成維修單", command=self._generate_fix,
-                  bg="#d68910", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 12, "bold"), pady=10).pack(fill="x")
+        bb = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
+        bb.pack(side="bottom", fill="x", padx=12, pady=8)
+        ctk.CTkButton(bb, text="🔧  生成維修單", command=self._generate_fix,
+                       fg_color="#d68910", hover_color="#b7770d", text_color="white",
+                       font=("Microsoft JhengHei UI", 12, "bold"),
+                       height=44, corner_radius=8).pack(fill="x")
 
     # ── Tab 4：維修掛件 ───────────────────────────────────────
     def _build_tab_tag(self, parent, PAD, FONT, FONTB, BG):
         from tkcalendar import DateEntry
         GRAY = "#5d6d7e"
 
-        tgf = tk.LabelFrame(parent, text="維修掛件資料", bg=BG, font=FONTB)
-        tgf.pack(fill="x", padx=12, pady=(12, 4))
+        tgf_outer, tgf = _mk_lf(parent, "維修掛件資料", BG, FONTB)
+        tgf_outer.pack(fill="x", padx=12, pady=(12, 4))
         tgf.columnconfigure(1, weight=1)
         tgf.columnconfigure(3, weight=1)
 
         self._tag_vars = {}
 
-        # 客戶名稱
         cust_var = tk.StringVar()
         self._tag_vars["customer"] = cust_var
-        tk.Label(tgf, text="客戶名稱：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=0, column=0, sticky="w", padx=8, pady=2)
-        tk.Entry(tgf, textvariable=cust_var, font=FONT
-                 ).grid(row=0, column=1, sticky="ew", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="客戶名稱：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=0, column=0, sticky="w", padx=8, pady=2)
+        ctk.CTkEntry(tgf, textvariable=cust_var, font=FONT,
+                      corner_radius=4, border_width=1
+                      ).grid(row=0, column=1, sticky="ew", padx=8, pady=2)
 
         def _load_customer():
             if self._parsed_data:
@@ -196,73 +220,80 @@ class _DocumentsTab:
             else:
                 messagebox.showwarning("尚未載入", "請先選擇並載入報價單", parent=parent)
 
-        tk.Button(tgf, text="從報價單帶入", command=_load_customer,
-                  bg="#2e86c1", fg="white", relief="flat",
-                  font=FONT, padx=6).grid(row=0, column=2, padx=8, pady=2)
+        ctk.CTkButton(tgf, text="從報價單帶入", command=_load_customer,
+                       fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
+                       font=FONT, width=110, height=28, corner_radius=4
+                       ).grid(row=0, column=2, padx=8, pady=2)
 
-        # No.
         no_var = tk.StringVar(value="1")
         self._tag_vars["no"] = no_var
-        tk.Label(tgf, text="No.：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=1, column=0, sticky="w", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="No.：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=1, column=0, sticky="w", padx=8, pady=2)
         ttk.Combobox(tgf, textvariable=no_var,
                      values=[str(i) for i in range(1, 21)],
                      width=8, font=FONT).grid(row=1, column=1, sticky="w", padx=8, pady=2)
 
-        # 品號
         self._tag_partno_var = tk.StringVar()
         self._tag_vars["part_no"] = self._tag_partno_var
-        tk.Label(tgf, text="品號：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=1, column=2, sticky="w", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="品號：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=1, column=2, sticky="w", padx=8, pady=2)
         self._tag_partno_cb = ttk.Combobox(tgf, textvariable=self._tag_partno_var,
                                             font=FONT, width=20)
         self._tag_partno_cb.grid(row=1, column=3, sticky="ew", padx=8, pady=2)
 
-        # 序號 / 拉回日期
         seq_var = tk.StringVar()
         self._tag_vars["seq_no"] = seq_var
-        tk.Label(tgf, text="序號：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=2, column=0, sticky="w", padx=8, pady=2)
-        tk.Entry(tgf, textvariable=seq_var, font=FONT
-                 ).grid(row=2, column=1, sticky="ew", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="序號：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=2, column=0, sticky="w", padx=8, pady=2)
+        ctk.CTkEntry(tgf, textvariable=seq_var, font=FONT,
+                      corner_radius=4, border_width=1
+                      ).grid(row=2, column=1, sticky="ew", padx=8, pady=2)
 
-        tk.Label(tgf, text="拉回：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=2, column=2, sticky="w", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="拉回：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=2, column=2, sticky="w", padx=8, pady=2)
         self._tag_date_entry = DateEntry(
             tgf, font=FONT, date_pattern="yyyy/mm/dd",
             background="#2e86c1", foreground="white", width=14)
         self._tag_date_entry.grid(row=2, column=3, sticky="w", padx=8, pady=2)
 
-        # 問題 / 維修狀況
         prob_var = tk.StringVar()
         self._tag_vars["problem"] = prob_var
-        tk.Label(tgf, text="問題：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=3, column=0, sticky="w", padx=8, pady=2)
-        tk.Entry(tgf, textvariable=prob_var, font=FONT
-                 ).grid(row=3, column=1, sticky="ew", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="問題：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=3, column=0, sticky="w", padx=8, pady=2)
+        ctk.CTkEntry(tgf, textvariable=prob_var, font=FONT,
+                      corner_radius=4, border_width=1
+                      ).grid(row=3, column=1, sticky="ew", padx=8, pady=2)
 
         status_var = tk.StringVar()
         self._tag_vars["repair_status"] = status_var
-        tk.Label(tgf, text="維修狀況：", bg=BG, anchor="w", font=FONT
-                 ).grid(row=3, column=2, sticky="w", padx=8, pady=2)
-        tk.Entry(tgf, textvariable=status_var, font=FONT
-                 ).grid(row=3, column=3, sticky="ew", padx=8, pady=2)
+        ctk.CTkLabel(tgf, text="維修狀況：", fg_color="transparent",
+                      anchor="w", font=FONT, text_color="#2c3e50"
+                      ).grid(row=3, column=2, sticky="w", padx=8, pady=2)
+        ctk.CTkEntry(tgf, textvariable=status_var, font=FONT,
+                      corner_radius=4, border_width=1
+                      ).grid(row=3, column=3, sticky="ew", padx=8, pady=2)
 
-        # 輸出路徑
-        pf = tk.Frame(parent, bg="#e8ecf0")
+        pf = ctk.CTkFrame(parent, fg_color="#e8ecf0", corner_radius=6)
         pf.pack(fill="x", padx=12, pady=4)
-        tk.Label(pf, text="輸出路徑：", bg="#e8ecf0",
-                 font=("Microsoft JhengHei UI", 9), fg=GRAY,
-                 anchor="w", width=10).pack(side="left", padx=8, pady=6)
-        tk.Label(pf, text=r"Z:\待維修機台資料",
-                 bg="#e8ecf0", font=("Microsoft JhengHei UI", 9), fg=GRAY
-                 ).pack(side="left", pady=6)
+        ctk.CTkLabel(pf, text="輸出路徑：", fg_color="transparent",
+                      font=("Microsoft JhengHei UI", 9), text_color=GRAY,
+                      anchor="w", width=80).pack(side="left", padx=8, pady=6)
+        ctk.CTkLabel(pf, text=r"Z:\待維修機台資料",
+                      fg_color="transparent",
+                      font=("Microsoft JhengHei UI", 9), text_color=GRAY
+                      ).pack(side="left", pady=6)
 
-        bb = tk.Frame(parent, bg=BG, pady=8)
-        bb.pack(side="bottom", fill="x", padx=12)
-        tk.Button(bb, text="📋  生成維修掛件", command=self._generate_tag_doc,
-                  bg="#1a5276", fg="white", relief="flat",
-                  font=("Microsoft JhengHei UI", 12, "bold"), pady=10).pack(fill="x")
+        bb = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
+        bb.pack(side="bottom", fill="x", padx=12, pady=8)
+        ctk.CTkButton(bb, text="📋  生成維修掛件", command=self._generate_tag_doc,
+                       fg_color="#1a5276", hover_color="#154360", text_color="white",
+                       font=("Microsoft JhengHei UI", 12, "bold"),
+                       height=44, corner_radius=8).pack(fill="x")
 
     # ── Callbacks ─────────────────────────────────────────────
 
@@ -281,15 +312,16 @@ class _DocumentsTab:
             return
         x, y, _, h = bbox
 
-        pop = tk.Toplevel(self)
+        pop = ctk.CTkToplevel(self)
         pop.title(f"編輯「{col_disp[col_idx]}」")
         pop.geometry(f"300x80+{self.winfo_rootx()+x}+{self.winfo_rooty()+y+h}")
-        pop.grab_set()
+        pop.after(100, pop.grab_set)
 
         var   = tk.StringVar(value=old_val)
-        entry = tk.Entry(pop, textvariable=var, font=("Microsoft JhengHei UI", 11))
+        entry = ctk.CTkEntry(pop, textvariable=var,
+                              font=("Microsoft JhengHei UI", 11),
+                              corner_radius=4, border_width=1)
         entry.pack(fill="x", padx=10, pady=8)
-        entry.select_range(0, "end")
         entry.focus()
 
         def save(_=None):
@@ -313,8 +345,10 @@ class _DocumentsTab:
             pop.destroy()
 
         entry.bind("<Return>", save)
-        tk.Button(pop, text="確認", command=save,
-                  bg="#2e86c1", fg="white", relief="flat").pack(pady=2)
+        ctk.CTkButton(pop, text="確認", command=save,
+                       fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
+                       font=("Microsoft JhengHei UI", 10),
+                       width=80, height=28, corner_radius=4).pack(pady=2)
 
     def _add_row(self):
         n = len(self._tree.get_children()) + 1
@@ -331,12 +365,14 @@ class _DocumentsTab:
             self._tree.item(rid, values=v)
 
     def _add_operator(self):
-        pop = tk.Toplevel(self)
+        pop = ctk.CTkToplevel(self)
         pop.title("新增製表人員")
         pop.geometry("260x80")
-        pop.grab_set()
+        pop.after(100, pop.grab_set)
         var   = tk.StringVar()
-        entry = tk.Entry(pop, textvariable=var, font=("Microsoft JhengHei UI", 11))
+        entry = ctk.CTkEntry(pop, textvariable=var,
+                              font=("Microsoft JhengHei UI", 11),
+                              corner_radius=4, border_width=1)
         entry.pack(fill="x", padx=10, pady=8)
         entry.focus()
 
@@ -352,8 +388,10 @@ class _DocumentsTab:
             pop.destroy()
 
         entry.bind("<Return>", save)
-        tk.Button(pop, text="新增", command=save,
-                  bg="#27ae60", fg="white", relief="flat").pack(pady=2)
+        ctk.CTkButton(pop, text="新增", command=save,
+                       fg_color="#27ae60", hover_color="#1e8449", text_color="white",
+                       font=("Microsoft JhengHei UI", 10),
+                       width=80, height=28, corner_radius=4).pack(pady=2)
 
     def _del_operator(self):
         cur = self._operator_var.get()
