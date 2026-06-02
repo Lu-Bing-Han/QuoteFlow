@@ -65,6 +65,27 @@ def _save_synced_ids(synced_path: Path, ids: set):
     )
 
 
+def write_cards(cards: list[dict], production_file: Path | None = None) -> int:
+    """直接將指定卡片寫入生產群組紀錄「總表」，不做 ID 去重。"""
+    if not cards:
+        return 0
+    cards_sorted = sorted(cards, key=lambda c: c.get("created_dt") or date.max)
+    _file = production_file or PRODUCTION_FILE
+    wb = openpyxl.load_workbook(str(_file))
+    ws = wb["總表"] if "總表" in wb.sheetnames else wb.active
+    for card in cards_sorted:
+        ws.append(_card_to_row(card))
+        r = ws.max_row
+        for col in range(1, 12):
+            ws.cell(r, col).font = _FONT
+        ws.cell(r, 2).alignment = _CENTER
+        ws.cell(r, 5).alignment = _CENTER
+        ws.cell(r, 11).alignment = _RIGHT
+    wb.save(str(_file))
+    wb.close()
+    return len(cards_sorted)
+
+
 def sync_production(cards: list[dict], synced_path: Path,
                     production_file: Path | None = None) -> int:
     """將 2026/5/15 之後且尚未同步的卡片附加到生產群組紀錄 Excel。"""
@@ -83,7 +104,7 @@ def sync_production(cards: list[dict], synced_path: Path,
 
     _file = production_file or PRODUCTION_FILE
     wb = openpyxl.load_workbook(str(_file))
-    ws = wb.active
+    ws = wb["總表"] if "總表" in wb.sheetnames else wb.active
     for card in new_cards:
         ws.append(_card_to_row(card))
         r = ws.max_row

@@ -89,16 +89,23 @@ def _parse_title(title: str) -> dict:
         prefix = m.group(1).upper()
         t = t[m.end():].strip()
 
-    # 客戶名稱（括號前的文字）
+    # 客戶名稱（括號前的文字）與地區（括號內）
     company = ""
-    m = re.match(r'^(.+?)[\(（]', t)
+    location = ""
+    m = re.match(r'^(.+?)[\(（](.+?)[\)）]', t)
     if m:
-        company = m.group(1).strip()
-        t = re.sub(r'^.+?[\)）]\s*', '', t).strip()   # 移除地點括號
+        company  = m.group(1).strip()
+        location = m.group(2).strip()
+        t = t[m.end():].strip()
     else:
-        parts = t.split()
-        company = parts[0] if parts else ""
-        t = ' '.join(parts[1:])
+        m2 = re.match(r'^(.+?)[\(（]', t)
+        if m2:
+            company = m2.group(1).strip()
+            t = re.sub(r'^.+?[\)）]\s*', '', t).strip()
+        else:
+            parts = t.split()
+            company = parts[0] if parts else ""
+            t = ' '.join(parts[1:])
 
     # 聯絡人（先生/小姐/女士 結尾）
     m = re.match(r'^.+?(?:先生|小姐|女士)\s*[-\s]*', t)
@@ -116,7 +123,7 @@ def _parse_title(title: str) -> dict:
 
     product = re.sub(r'【[^】]*】', '', t).strip()
 
-    return {"prefix": prefix, "company": company, "product": product, "quantity": quantity}
+    return {"prefix": prefix, "company": company, "location": location, "product": product, "quantity": quantity}
 
 
 def fetch_po_cards(api_key: str, token: str) -> list[dict]:
@@ -151,6 +158,7 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
             "title":        card["name"],
             "prefix":       fields["prefix"],
             "company":      fields["company"],
+            "location":     fields["location"],
             "product":      fields["product"],
             "quantity":     fields["quantity"],
             "created_date": created_date,

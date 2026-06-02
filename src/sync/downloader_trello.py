@@ -15,8 +15,8 @@ def _auth(api_key: str, token: str) -> dict:
     return {"key": api_key, "token": token}
 
 
-def get_board_lists(api_key: str, token: str) -> list[dict]:
-    """回傳看板「物流事業部1」的所有清單 [{"id": ..., "name": ...}, ...]。"""
+def get_board_lists(api_key: str, token: str, board_name: str = _BOARD_NAME) -> list[dict]:
+    """回傳指定看板的所有清單 [{"id": ..., "name": ...}, ...]。"""
     resp = requests.get(
         f"{_API_BASE}/members/me/boards",
         params={**_auth(api_key, token), "fields": "name,id"},
@@ -25,11 +25,11 @@ def get_board_lists(api_key: str, token: str) -> list[dict]:
     resp.raise_for_status()
     board_id = None
     for b in resp.json():
-        if b["name"] == _BOARD_NAME:
+        if b["name"] == board_name:
             board_id = b["id"]
             break
     if not board_id:
-        raise ValueError(f"找不到看板「{_BOARD_NAME}」")
+        raise ValueError(f"找不到看板「{board_name}」")
 
     resp = requests.get(
         f"{_API_BASE}/boards/{board_id}/lists",

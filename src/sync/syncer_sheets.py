@@ -72,6 +72,23 @@ def _card_to_row(card: dict) -> list:
     ]
 
 
+def push_cards(cards: list[dict], credentials_path: Path, token_path: Path) -> int:
+    """直接將指定卡片寫入 Google Sheet，不做 ID 去重。"""
+    if not cards:
+        return 0
+    service    = get_service(credentials_path, token_path)
+    sheet_name = _get_sheet_name(service, _SPREADSHEET_ID, _SHEET_GID)
+    rows = [_card_to_row(c) for c in cards]
+    service.spreadsheets().values().append(
+        spreadsheetId=_SPREADSHEET_ID,
+        range=f"'{sheet_name}'!A:N",
+        valueInputOption="USER_ENTERED",
+        insertDataOption="INSERT_ROWS",
+        body={"values": rows},
+    ).execute()
+    return len(cards)
+
+
 def sync_cards(cards: list[dict], credentials_path: Path,
                token_path: Path, synced_path: Path) -> int:
     """

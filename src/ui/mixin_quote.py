@@ -22,7 +22,7 @@ class _QuoteTab:
         GREEN  = "#1e8449"
         FONT_S = ("Microsoft JhengHei UI", 9)
         MONO   = ("Consolas", 9)
-        _TARGET_LIST = "1.待報價(evaluate)"
+        _BOARD_OPTIONS = ["物流事業部1", "物流事業部2"]
 
         _PIC_DIR   = TEMPLATE_DIR / "Picture"
         _img_cache: dict = {}
@@ -311,12 +311,18 @@ class _QuoteTab:
 
         p1_top = tk.Frame(p1, bg=BG)
         p1_top.pack(fill="x", padx=10, pady=(8, 2))
-        ctk.CTkLabel(p1_top, text=f"來源：{_TARGET_LIST}",
-                      fg_color="transparent", font=FONT_S,
-                      text_color=GRAY).pack(side="left")
+        ctk.CTkLabel(p1_top, text="來源：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).pack(side="left")
+        _board_var = tk.StringVar(value=_BOARD_OPTIONS[0])
+        _board_cb = ctk.CTkComboBox(
+            p1_top, values=_BOARD_OPTIONS, variable=_board_var,
+            font=FONT_S, width=130, height=26, corner_radius=4,
+            state="readonly",
+        )
+        _board_cb.pack(side="left", padx=(0, 6))
         p1_status = ctk.CTkLabel(p1_top, text="", fg_color="transparent",
                                   font=FONT_S, text_color=GRAY)
-        p1_status.pack(side="left", padx=8)
+        p1_status.pack(side="left", padx=4)
 
         def _get_tr_creds():
             tr_cfg  = self._config.get("trello", {})
@@ -355,10 +361,11 @@ class _QuoteTab:
             from sync.downloader_trello import get_board_lists, get_list_cards
             api_key, token = _get_tr_creds()
             if not api_key: return
+            board_name = _board_var.get()
             p1_status.configure(text="載入中…", text_color=GRAY)
             parent.update_idletasks()
             try:
-                lists  = get_board_lists(api_key, token)
+                lists  = get_board_lists(api_key, token, board_name=board_name)
                 target = next((l for l in lists
                                if "待報價" in l["name"] or "evaluate" in l["name"].lower()), None)
                 if not target:
@@ -629,6 +636,10 @@ class _QuoteTab:
             b.bind("<MouseWheel>", _cat_scroll)
             _cat_btns[cat] = b
 
+        # 返回按鈕固定在底部（先 pack side=bottom）
+        p2_footer = tk.Frame(p2, bg=BG)
+        p2_footer.pack(side="bottom", fill="x")
+
         # 產品格狀列表
         prod_outer = tk.Frame(p2, bg=BG)
         prod_outer.pack(fill="both", expand=True, padx=10, pady=(0, 6))
@@ -749,12 +760,12 @@ class _QuoteTab:
                          fg="white" if c == CATS[0] else "#333")
         _render_products()
 
-        p2_back_btn = ctk.CTkButton(p2, text="← 返回顧客資料",
+        p2_back_btn = ctk.CTkButton(p2_footer, text="← 返回顧客資料",
                                      command=lambda: _go_step(1),
                                      fg_color=GRAY, hover_color="#4d5d6e",
                                      text_color="white", font=FONT_S,
-                                     width=120, height=30, corner_radius=6)
-        p2_back_btn.pack(anchor="w", padx=10, pady=(0, 6))
+                                     height=32, corner_radius=0)
+        p2_back_btn.pack(fill="x")
 
         # ════════════════════════════════════════════════════
         # Step 3 — 報價確認
@@ -825,6 +836,10 @@ class _QuoteTab:
                               font=FONT_S, anchor="w", wraplength=620,
                               justify="left")
         p3_out_lbl.pack(fill="x", padx=10)
+
+        # 返回按鈕固定在底部（先 pack side=bottom，再讓 hist_container expand）
+        p3_footer = tk.Frame(p3, bg=BG)
+        p3_footer.pack(side="bottom", fill="x")
 
         # 歷史區段容器（expand 填滿剩餘空間）
         hist_container = tk.Frame(p3, bg=BG)
@@ -1123,12 +1138,12 @@ class _QuoteTab:
                 p3_out_lbl.configure(text=f"✘  {e}", fg="#c0392b")
                 messagebox.showerror("生成失敗", str(e), parent=parent)
 
-        p3_back_btn = ctk.CTkButton(p3, text="← 返回選取品項",
+        p3_back_btn = ctk.CTkButton(p3_footer, text="← 返回選取品項",
                                      command=lambda: _go_step(2),
                                      fg_color=GRAY, hover_color="#4d5d6e",
                                      text_color="white", font=FONT_S,
-                                     width=120, height=30, corner_radius=6)
-        p3_back_btn.pack(anchor="w", padx=10, pady=(0, 4))
+                                     height=32, corner_radius=0)
+        p3_back_btn.pack(fill="x")
 
         # ════════════════════════════════════════════════════
         # Step 切換

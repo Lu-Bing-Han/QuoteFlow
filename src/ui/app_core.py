@@ -265,6 +265,7 @@ class App(
         _nav_group("🃏  Trello")
         _nav_item("出貨一覽表",   "overview")
         _nav_item("生產群組紀錄", "production")
+        _nav_item("出貨指示單",   "shipping_order")
         _nav_item("建立卡片",     "create")
         _nav_item("下載卡片",     "download")
 
@@ -279,9 +280,10 @@ class App(
         self._build_tab_tag(        _make_page("tag"),        PAD, FONT, FONTB, BG)
         self._build_tab_label(      _make_page("label"),      FONT, FONTB, BG)
         self._build_tab_schedule(   _make_page("schedule"),   FONT, FONTB, BG)
-        self._build_tab_overview(   _make_page("overview"),   FONT, FONTB, BG)
-        self._build_tab_production( _make_page("production"), FONT, FONTB, BG)
-        self._build_tab_create_cards( _make_page("create"),   FONT, FONTB, BG)
+        self._build_tab_overview(        _make_page("overview"),       FONT, FONTB, BG)
+        self._build_tab_production(      _make_page("production"),     FONT, FONTB, BG)
+        self._build_tab_shipping_order(  _make_page("shipping_order"), FONT, FONTB, BG)
+        self._build_tab_create_cards(    _make_page("create"),         FONT, FONTB, BG)
         self._build_tab_download_cards(_make_page("download"),FONT, FONTB, BG)
         self._build_tab_history(    _make_page("history"),    FONT, FONTB, BG)
 

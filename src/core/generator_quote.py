@@ -680,6 +680,32 @@ def generate_quote_from_cart(
         except Exception:
             wb_ap = None
 
+    # ── 2b. 讀取 buyerlist：判斷是否為特殊客戶，並取得列數上限 ──
+    # 列數上限放在 template_series.xlsx 的合併格 I2:J2
+    _buyer_row_limit: int | None = None
+    _bl_path = template_path.parent / "template_buyerlist.xlsx"
+    if _bl_path.exists() and ap_path.exists():
+        try:
+            _bl_wb = openpyxl.load_workbook(str(_bl_path), data_only=True)
+            _bl_ws = _bl_wb.active
+            _company = customer.get("company", "")
+            _matched = any(
+                str(row[0]).strip() and str(row[0]).strip() in _company
+                for row in _bl_ws.iter_rows(min_col=1, max_col=1, values_only=True)
+                if row[0] is not None
+            )
+            _bl_wb.close()
+            if _matched and wb_ap:
+                # 從 template_series I2（合併格 I2:J2）讀取行數上限
+                _limit_val = wb_ap.active.cell(row=2, column=9).value
+                if _limit_val is not None:
+                    try:
+                        _buyer_row_limit = int(_limit_val)
+                    except (ValueError, TypeError):
+                        pass
+        except Exception:
+            pass
+
     def _get_ap_sheet(sheet_name: str):
         """取得對應工作表；找不到時回退到第一個工作表。"""
         if not wb_ap:
@@ -776,6 +802,8 @@ def generate_quote_from_cart(
         ap_range   = (_row_info[1], _row_info[2]) if _row_info else None
         ws_ap      = _get_ap_sheet(_row_info[0]) if _row_info else None
         block_rows = (ap_range[1] - ap_range[0] + 1) if ap_range else 1
+        if _buyer_row_limit is not None:
+            block_rows = min(block_rows, _buyer_row_limit)
 
         # 插入空列（openpyxl 會自動將 tax_row 以下的列下移）
         ws.insert_rows(insert_pos, amount=block_rows)
