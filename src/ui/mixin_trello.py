@@ -143,7 +143,8 @@ class _TrelloTab:
                 text_color=GREEN)
 
         def _fetch():
-            from sync.syncer_trello import fetch_po_cards
+            from sync.syncer_trello import fetch_po_cards, update_location_cache
+            from _paths import _LOCATION_CACHE_PATH
             api_key = key_var.get().strip()
             token   = tok_var.get().strip()
             if not api_key or not token:
@@ -152,6 +153,7 @@ class _TrelloTab:
             parent.update_idletasks()
             try:
                 cards = fetch_po_cards(api_key, token)
+                update_location_cache(cards, _LOCATION_CACHE_PATH)
                 _all_cards.clear()
                 _all_cards.extend(cards)
                 _apply_days_filter()
@@ -258,18 +260,18 @@ class _TrelloTab:
     #  Tab 8：生產群組紀錄
     # ════════════════════════════════════════════════════════
     def _build_tab_production(self, parent, FONT, FONTB, BG):
+        from _paths import _GSHEETS_CREDS_PATH, _GSHEETS_TOKEN_PATH  # noqa: F401
         GRAY  = "#5d6d7e"
         GREEN = "#1e8449"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
-        _all_cards:       list[dict] = []
         _displayed_cards: list[dict] = []
 
         # ── 抓取列 ────────────────────────────────────────
         fetch_row = tk.Frame(parent, bg=BG)
         fetch_row.pack(fill="x", padx=12, pady=(12, 2))
 
-        ctk.CTkLabel(fetch_row, text="Trello 憑證與「出貨一覽表」頁籤共用",
+        ctk.CTkLabel(fetch_row, text="來源：出貨一覽表 Google Sheet",
                       fg_color="transparent", font=FONT_S, text_color=GRAY
                       ).pack(side="left", padx=(0, 12))
 
@@ -277,72 +279,46 @@ class _TrelloTab:
                                      font=FONT_S, text_color=GRAY)
         fetch_status.pack(side="left", padx=(8, 0))
 
-        ctk.CTkLabel(fetch_row, text="近", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(8, 2))
-        days_var = tk.StringVar(value="7")
-        ctk.CTkEntry(fetch_row, textvariable=days_var, font=FONT_S,
-                      width=40, height=28, corner_radius=4,
-                      justify="center").pack(side="left")
-        ctk.CTkLabel(fetch_row, text="天", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(2, 0))
-
-        def _render_tree(cards: list[dict]):
-            _displayed_cards.clear()
-            _displayed_cards.extend(cards)
-            tree.delete(*tree.get_children())
-            for c in cards:
-                tree.insert("", "end", values=(
-                    c["created_date"],
-                    c["company"],
-                    c["product"],
-                    c["quantity"],
-                    c.get("delivery", ""),
-                    c.get("payment_raw", ""),
-                ))
-            tree.selection_set(tree.get_children())
-            prev_title_lbl.configure(
-                text=f"  本周下單卡片（共 {len(cards)} 張，可多選）  ")
-
-        def _apply_days_filter():
-            from datetime import date, timedelta
-            try:
-                n = int(days_var.get())
-            except ValueError:
-                n = 7
-            cutoff = date.today() - timedelta(days=n)
-            filtered = [c for c in _all_cards
-                        if c.get("created_dt") and c["created_dt"] >= cutoff]
-            _render_tree(filtered)
-            fetch_status.configure(
-                text=f"✔  共 {len(_all_cards)} 張，顯示近 {n} 天 {len(filtered)} 張",
-                text_color=GREEN)
+        def _parse_date_key(s: str):
+            import re
+            s = str(s).replace("前", "").strip()
+            m = re.search(r'(\d{1,2})[/\-](\d{1,2})', s)
+            if m:
+                return (int(m.group(1)), int(m.group(2)))
+            return (99, 99)
 
         def _fetch():
-            from sync.syncer_trello import fetch_po_cards
-            tr_cfg  = self._config.get("trello", {})
-            api_key = tr_cfg.get("api_key", "").strip()
-            token   = tr_cfg.get("token",   "").strip()
-            if not api_key or not token:
-                messagebox.showwarning("憑證未設定",
-                    "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證", parent=parent); return
-            fetch_status.configure(text="抓取中…", text_color=GRAY)
+            from sync.syncer_shipping_order import fetch_from_overview
+            if not _GSHEETS_CREDS_PATH.exists():
+                messagebox.showerror("缺少憑證", f"找不到 {_GSHEETS_CREDS_PATH}", parent=parent); return
+            fetch_status.configure(text="讀取中…", text_color=GRAY)
             parent.update_idletasks()
             try:
-                cards = fetch_po_cards(api_key, token)
-                _all_cards.clear()
-                _all_cards.extend(cards)
-                _apply_days_filter()
+                records = fetch_from_overview(_GSHEETS_CREDS_PATH, _GSHEETS_TOKEN_PATH)
+                records.sort(key=lambda r: _parse_date_key(r.get("order_date", "")), reverse=True)
+                _displayed_cards.clear()
+                _displayed_cards.extend(records)
+                tree.delete(*tree.get_children())
+                for r in records:
+                    tree.insert("", "end", values=(
+                        r.get("prefix",       ""),
+                        r.get("order_date",   ""),
+                        r.get("company",      ""),
+                        r.get("product",      ""),
+                        r.get("delivery",     ""),
+                        r.get("payment_type", ""),
+                    ))
+                tree.selection_set(tree.get_children())
+                prev_title_lbl.configure(
+                    text=f"  出貨一覽表資料（共 {len(records)} 筆，可多選）  ")
+                fetch_status.configure(text=f"✔  找到 {len(records)} 筆", text_color=GREEN)
             except Exception as e:
                 fetch_status.configure(text=f"✘  {e}", text_color="#c0392b")
 
-        ctk.CTkButton(fetch_row, text="🔄 抓取卡片", command=_fetch,
+        ctk.CTkButton(fetch_row, text="🔄 讀取出貨一覽表", command=_fetch,
                        fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
-                       font=FONT_S, width=90, height=28, corner_radius=4
+                       font=FONT_S, width=120, height=28, corner_radius=4
                        ).pack(side="left")
-        ctk.CTkButton(fetch_row, text="篩選", command=_apply_days_filter,
-                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
-                       font=FONT_S, width=50, height=28, corner_radius=4
-                       ).pack(side="left", padx=(4, 0))
 
         # ── 卡片預覽 Treeview ─────────────────────────────
         prev_outer = tk.Frame(parent, bg="#d0d7de")
@@ -351,33 +327,65 @@ class _TrelloTab:
         prev_inner.pack(fill="both", expand=True, padx=1, pady=1)
 
         prev_title_lbl = ctk.CTkLabel(prev_inner,
-                                       text="  本周下單卡片（共 0 張，可多選）  ",
+                                       text="  出貨一覽表資料（共 0 筆，可多選）  ",
                                        fg_color="transparent", text_color=GRAY, font=FONT_S)
         prev_title_lbl.pack(anchor="w", padx=10, pady=(4, 0))
 
         tree_frame = tk.Frame(prev_inner, bg=BG)
         tree_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
 
-        cols = ("date", "company", "product", "qty", "delivery", "payment")
+        cols = ("prefix", "order_date", "company", "product", "delivery", "payment")
         tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
                              selectmode="extended", height=6)
-        tree.heading("date",     text="下單日期")
-        tree.heading("company",  text="客戶名稱")
-        tree.heading("product",  text="品號 / 產品")
-        tree.heading("qty",      text="數量")
-        tree.heading("delivery", text="交期")
-        tree.heading("payment",  text="付款條件")
-        tree.column("date",     width=70,  anchor="center", stretch=False)
-        tree.column("company",  width=140, anchor="w",      stretch=False)
-        tree.column("product",  width=240, anchor="w",      stretch=True)
-        tree.column("qty",      width=50,  anchor="center", stretch=False)
-        tree.column("delivery", width=80,  anchor="center", stretch=False)
-        tree.column("payment",  width=100, anchor="w",      stretch=False)
+        tree.heading("prefix",     text="業務")
+        tree.heading("order_date", text="下單日期")
+        tree.heading("company",    text="客戶名稱")
+        tree.heading("product",    text="品號 / 產品")
+        tree.heading("delivery",   text="交期")
+        tree.heading("payment",    text="付款條件")
+        tree.column("prefix",     width=55,  anchor="center", stretch=False)
+        tree.column("order_date", width=70,  anchor="center", stretch=False)
+        tree.column("company",    width=135, anchor="w",      stretch=False)
+        tree.column("product",    width=240, anchor="w",      stretch=True)
+        tree.column("delivery",   width=75,  anchor="center", stretch=False)
+        tree.column("payment",    width=90,  anchor="w",      stretch=False)
 
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vsb.set)
         tree.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
+
+        # ── 拖曳框選 ──────────────────────────────────────
+        _drag_anchor = [None]
+
+        def _on_press(event):
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            _drag_anchor[0] = item
+            tree.selection_set(item)
+
+        def _on_drag(event):
+            if not _drag_anchor[0]:
+                return
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            all_items = tree.get_children()
+            try:
+                a = all_items.index(_drag_anchor[0])
+                b = all_items.index(item)
+            except ValueError:
+                return
+            lo, hi = min(a, b), max(a, b)
+            tree.selection_set(all_items[lo:hi + 1])
+
+        def _on_release(event):
+            _drag_anchor[0] = None
+
+        tree.bind("<Button-1>",        _on_press)
+        tree.bind("<B1-Motion>",       _on_drag)
+        tree.bind("<ButtonRelease-1>", _on_release)
 
         # ── 全選 / 取消全選 ───────────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
@@ -399,24 +407,24 @@ class _TrelloTab:
         out_label.pack(fill="x", padx=16, pady=(4, 0))
 
         def _write():
-            from sync.syncer_production import write_cards
+            from sync.syncer_production import write_sheet_records
             sel_ids = tree.selection()
             if not sel_ids:
-                messagebox.showwarning("未選擇", "請先選取要寫入的卡片", parent=parent); return
+                messagebox.showwarning("未選擇", "請先選取要寫入的資料", parent=parent); return
 
             indices  = [tree.index(i) for i in sel_ids]
             selected = [_displayed_cards[i] for i in indices]
 
             prod_file = self._get_path("production_file")
             if not messagebox.askyesno("確認寫入",
-                    f"即將寫入 {len(selected)} 筆卡片至「總表」，確定繼續？",
+                    f"即將寫入 {len(selected)} 筆資料至「總表」，確定繼續？",
                     parent=parent):
                 return
 
             out_label.configure(text="寫入中…", text_color=GRAY)
             parent.update_idletasks()
             try:
-                added = write_cards(selected, production_file=prod_file)
+                added = write_sheet_records(selected, production_file=prod_file)
                 out_label.configure(
                     text=f"✔  寫入完成，新增 {added} 筆資料", text_color=GREEN)
                 if messagebox.askyesno("完成",

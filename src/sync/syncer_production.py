@@ -26,6 +26,7 @@ def _fmt_date(date_str: str) -> str:
     return date_str
 
 
+
 def _to_number(s: str):
     """字串轉數字；去除千分位逗號。無法轉換則原樣回傳。"""
     cleaned = str(s).replace(",", "").strip()
@@ -63,6 +64,44 @@ def _save_synced_ids(synced_path: Path, ids: set):
     synced_path.write_text(
         json.dumps(sorted(ids), ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+
+def _sheet_record_to_row(record: dict) -> list:
+    delivery = _fmt_date(record.get("delivery", "").replace("前", "").strip())
+    return [
+        "",                                          # A：業務（不填）
+        _fmt_date(record.get("order_date", "")),     # B：下單日期
+        record.get("company",      ""),              # C：客戶名稱
+        record.get("product",      ""),              # D：品號
+        _to_number(record.get("quantity", "")),      # E：數量
+        delivery,                                    # F：出貨日期
+        "",                                          # G：出貨單
+        "",                                          # H：發票
+        "",                                          # I：空欄
+        record.get("payment_type", ""),              # J：付款條件
+        _to_number(record.get("amount",    "")),      # K：綜額
+    ]
+
+
+def write_sheet_records(records: list[dict], production_file: Path | None = None) -> int:
+    """將出貨一覽表 Google Sheet 選取的資料列寫入生產群組紀錄「總表」。"""
+    if not records:
+        return 0
+    _file = production_file or PRODUCTION_FILE
+    wb = openpyxl.load_workbook(str(_file))
+    ws = wb["總表"] if "總表" in wb.sheetnames else wb.active
+    for record in records:
+        ws.append(_sheet_record_to_row(record))
+        r = ws.max_row
+        for col in range(1, 12):
+            ws.cell(r, col).font = _FONT
+        ws.cell(r, 2).alignment = _CENTER
+        ws.cell(r, 5).alignment = _CENTER
+        ws.cell(r, 11).alignment = _RIGHT
+        ws.cell(r, 11).number_format = "#,##0"
+    wb.save(str(_file))
+    wb.close()
+    return len(records)
 
 
 def write_cards(cards: list[dict], production_file: Path | None = None) -> int:

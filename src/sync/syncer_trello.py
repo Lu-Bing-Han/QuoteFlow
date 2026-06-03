@@ -1,8 +1,10 @@
 """
 syncer_trello.py — 從 Trello「本周下單(PO)」清單抓取卡片並解析欄位
 """
+import json
 import re
 from datetime import datetime, timezone, date as date_type
+from pathlib import Path
 
 import requests
 
@@ -172,3 +174,21 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
             "has_remodel":  has_remodel,
         })
     return result
+
+
+def update_location_cache(cards: list[dict], cache_path: Path) -> None:
+    """從 Trello 卡片的 location 欄位更新客戶地區快取（只補新資料，不覆蓋已有的）。"""
+    existing: dict[str, str] = {}
+    if cache_path.exists():
+        try:
+            existing = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    for card in cards:
+        company  = card.get("company",  "").strip()
+        location = card.get("location", "").strip()
+        if company and location and company not in existing:
+            existing[company] = location
+    cache_path.write_text(
+        json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
