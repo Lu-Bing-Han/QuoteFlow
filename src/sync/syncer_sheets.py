@@ -14,6 +14,18 @@ _SPREADSHEET_ID  = "1lmQR4CG7dqOqiXIIRF_ztAu2mjw1XyGPorZM_7La6Dg"
 _SHEET_GID       = 584074203
 
 
+def _fmt_api_error(e: Exception) -> str:
+    """將 Google API 常見錯誤轉成易讀訊息。"""
+    msg = str(e)
+    if "401" in msg or "invalid_grant" in msg.lower() or "token has been expired" in msg.lower():
+        return "Google 憑證已過期，請刪除 gsheets_token.json 後重新啟動程式授權"
+    if "403" in msg:
+        return "Google API 權限不足，請確認 credentials.json 設定"
+    if "quota" in msg.lower():
+        return "Google API 配額已用盡，請稍後再試"
+    return msg
+
+
 def get_service(credentials_path: Path, token_path: Path):
     """回傳已授權的 Sheets API service；首次執行會開瀏覽器授權。"""
     creds = None
