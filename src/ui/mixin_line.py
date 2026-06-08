@@ -126,51 +126,93 @@ class _LineTab:
 
         _detail_labels: dict[str, ctk.CTkLabel] = {}
 
-        def _detail_row(key: str, label: str, row_idx: int):
-            ctk.CTkLabel(detail_lf, text=label + "：", fg_color="transparent",
-                          font=FONT_S, text_color=GRAY,
-                          anchor="w").grid(row=row_idx, column=0, sticky="nw",
-                                           padx=(8, 2), pady=4)
-            lbl = ctk.CTkLabel(detail_lf, text="—", fg_color="transparent",
-                                font=FONT_S, anchor="nw", wraplength=160,
-                                justify="left")
-            lbl.grid(row=row_idx, column=1, sticky="nw", padx=(0, 8), pady=4)
+        # ── 上方：唯讀基本資訊 ───────────────────────────────
+        info_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
+        info_frame.pack(fill="x", padx=8, pady=(6, 2))
+        info_frame.columnconfigure(1, weight=1)
+
+        def _info_row(key: str, label: str, row: int):
+            ctk.CTkLabel(info_frame, text=label + "：", fg_color="transparent",
+                          font=FONT_S, text_color=GRAY, anchor="w"
+                          ).grid(row=row, column=0, sticky="w", pady=2)
+            lbl = ctk.CTkLabel(info_frame, text="—", fg_color="transparent",
+                                font=FONT_S, anchor="w")
+            lbl.grid(row=row, column=1, sticky="w", padx=(4, 0), pady=2)
             _detail_labels[key] = lbl
 
-        detail_lf.columnconfigure(1, weight=1)
-        _detail_row("display_name", "顧客",   0)
-        _detail_row("created_at",   "時間",   1)
-        _detail_row("inquiry_type", "類型",   2)
-        _detail_row("status",       "狀態",   3)
+        _info_row("display_name", "LINE 名稱", 0)
+        _info_row("created_at",   "時間",       1)
+        _info_row("status",       "狀態",       2)
 
-        # 訊息完整內容
+        # ── 訊息內容 ─────────────────────────────────────────
         ctk.CTkLabel(detail_lf, text="訊息內容：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY,
-                      anchor="w").grid(row=4, column=0, columnspan=2,
-                                       sticky="w", padx=8, pady=(8, 2))
-        msg_box = ctk.CTkTextbox(detail_lf, font=FONT_S, height=120,
+                      font=FONT_S, text_color=GRAY, anchor="w"
+                      ).pack(anchor="w", padx=8, pady=(6, 2))
+        msg_box = ctk.CTkTextbox(detail_lf, font=FONT_S, height=70,
                                   corner_radius=4, border_width=1,
                                   state="disabled", wrap="word")
-        msg_box.grid(row=5, column=0, columnspan=2,
-                     sticky="ew", padx=8, pady=(0, 8))
+        msg_box.pack(fill="x", padx=8, pady=(0, 6))
 
-        # 類型選擇（客服可手動修改）
-        ctk.CTkLabel(detail_lf, text="調整類型：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY,
-                      anchor="w").grid(row=6, column=0, columnspan=2,
-                                       sticky="w", padx=8, pady=(4, 0))
+        # ── 可捲動的編輯表單 ─────────────────────────────────
+        ctk.CTkLabel(detail_lf, text="Gemini 辨識結果（可手動補填）：",
+                      fg_color="transparent", font=FONT_S, text_color=GRAY,
+                      anchor="w").pack(anchor="w", padx=8, pady=(2, 2))
+
+        scroll_frame = ctk.CTkScrollableFrame(detail_lf, fg_color="transparent",
+                                               height=200, corner_radius=0)
+        scroll_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+        scroll_frame.columnconfigure(1, weight=1)
+
+        _field_vars: dict[str, tk.StringVar] = {}
+
+        def _form_row(key: str, label: str, row: int):
+            ctk.CTkLabel(scroll_frame, text=label + "：", fg_color="transparent",
+                          font=FONT_S, text_color=GRAY, anchor="w"
+                          ).grid(row=row, column=0, sticky="w", padx=(4, 2), pady=2)
+            var = tk.StringVar()
+            ctk.CTkEntry(scroll_frame, textvariable=var, font=FONT_S,
+                          height=26, corner_radius=4, border_width=1
+                          ).grid(row=row, column=1, sticky="ew", padx=(0, 4), pady=2)
+            _field_vars[key] = var
+
+        _form_row("company_name",    "公司名稱", 0)
+        _form_row("area",            "市區區域", 1)
+        _form_row("contact_name",    "聯絡人",   2)
+        _form_row("tax_id",          "統一編號", 3)
+        _form_row("mobile",          "手機",     4)
+        _form_row("phone",           "電話",     5)
+        _form_row("fax",             "FAX",      6)
+        _form_row("address",         "地址",     7)
+        _form_row("email",           "Mail",     8)
+        _form_row("inquiry_product", "詢價商品", 9)
+
+        # ── 類型 + 人員代號 ───────────────────────────────────
+        bottom_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
+        bottom_frame.pack(fill="x", padx=8, pady=(4, 2))
+        bottom_frame.columnconfigure(1, weight=1)
+        bottom_frame.columnconfigure(3, weight=1)
+
+        ctk.CTkLabel(bottom_frame, text="類型：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).grid(row=0, column=0, sticky="w", pady=3)
         type_var = tk.StringVar(value="未分類")
-        type_menu = ctk.CTkOptionMenu(
-            detail_lf, variable=type_var,
-            values=["未分類", "新產品詢問", "維修需求", "其他"],
-            font=FONT_S, width=140, height=28, corner_radius=4,
-        )
-        type_menu.grid(row=7, column=0, columnspan=2,
-                       sticky="w", padx=8, pady=(0, 12))
+        ctk.CTkOptionMenu(bottom_frame, variable=type_var,
+                           values=["未分類", "新產品詢問", "維修需求", "其他"],
+                           font=FONT_S, width=110, height=26, corner_radius=4
+                           ).grid(row=0, column=1, sticky="w", padx=(2, 8), pady=3)
 
-        # 操作按鈕
+        ctk.CTkLabel(bottom_frame, text="人員：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).grid(row=0, column=2, sticky="w", pady=3)
+        operators  = self._config.get("operators", [""])
+        op_codes   = self._config.get("operator_codes", {})
+        op_var = tk.StringVar(value=operators[0] if operators else "")
+        ctk.CTkOptionMenu(bottom_frame, variable=op_var,
+                           values=operators if operators else [""],
+                           font=FONT_S, width=80, height=26, corner_radius=4
+                           ).grid(row=0, column=3, sticky="w", padx=(2, 0), pady=3)
+
+        # ── 操作按鈕 ─────────────────────────────────────────
         btn_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
-        btn_frame.grid(row=8, column=0, columnspan=2, sticky="ew", padx=8, pady=(0, 8))
+        btn_frame.pack(fill="x", padx=8, pady=(2, 8))
 
         btn_create = _ctk_btn(
             btn_frame, text="✔  建立 Trello 卡片",
@@ -249,17 +291,21 @@ class _LineTab:
                 conn.close()
 
         def _push_status_to_server(inquiry_id: int, status: str,
-                                   inquiry_type: str = "", trello_card_id: str = ""):
+                                   inquiry_type: str = "", trello_card_id: str = "",
+                                   extra: dict | None = None):
             """把狀態變更推回雲端（失敗不中斷，靜默忽略）。"""
             import requests as _req
             url = _srv_url()
             if not url:
                 return
+            payload = {"status": status,
+                       "inquiry_type": inquiry_type or None,
+                       "trello_card_id": trello_card_id or None}
+            if extra:
+                payload.update({k: v or None for k, v in extra.items()})
             try:
                 _req.patch(f"{url}/api/inquiries/{inquiry_id}",
-                           json={"status": status,
-                                 "inquiry_type": inquiry_type or None,
-                                 "trello_card_id": trello_card_id or None},
+                           json=payload,
                            headers=_srv_headers(), timeout=8)
             except Exception:
                 pass
@@ -356,18 +402,21 @@ class _LineTab:
             _selected_id[0] = row_data["id"]
             _detail_labels["display_name"].configure(text=row_data["display_name"])
             _detail_labels["created_at"].configure(text=row_data["created_at"][:16])
-            _detail_labels["inquiry_type"].configure(text=row_data["inquiry_type"])
 
             status = row_data["status"]
             color  = _STATUS_COLOR.get(status, GRAY)
             _detail_labels["status"].configure(text=status, text_color=color)
 
-            type_var.set(row_data["inquiry_type"])
+            type_var.set(row_data.get("inquiry_type", "未分類"))
 
             msg_box.configure(state="normal")
             msg_box.delete("1.0", "end")
             msg_box.insert("1.0", row_data["message"])
             msg_box.configure(state="disabled")
+
+            # 填入 Gemini 辨識結果
+            for key, var in _field_vars.items():
+                var.set(row_data.get(key, "") or "")
 
             is_pending = (status == "待處理")
             btn_create.configure(state="normal" if is_pending else "disabled")
@@ -421,12 +470,35 @@ class _LineTab:
             finally:
                 conn.close()
 
-            card_title = f"[LINE] {row['display_name']} — {row['inquiry_type']}"
-            card_desc  = (
-                f"顧客：{row['display_name']}\n"
-                f"類型：{row['inquiry_type']}\n"
-                f"時間：{row['created_at']}\n\n"
-                f"訊息內容：\n{row['message']}"
+            # 取人員代號
+            op_name = op_var.get()
+            op_code = op_codes.get(op_name, op_name[:1].upper() if op_name else "")
+
+            # 從表單讀取最新填入值（客服可能手動補填）
+            company  = _field_vars["company_name"].get().strip()
+            area     = _field_vars["area"].get().strip()
+            contact  = _field_vars["contact_name"].get().strip()
+            product  = _field_vars["inquiry_product"].get().strip()
+
+            # 標題：【代號 公司名(市區區域)-客戶名 -詢價商品】
+            area_part    = f"({area})" if area else ""
+            contact_part = f"-{contact}" if contact else ""
+            product_part = f" -{product}" if product else ""
+            card_title = (
+                f"【{op_code} {company}{area_part}{contact_part}{product_part}】"
+            )
+
+            card_desc = (
+                f"公司名稱: {_field_vars['company_name'].get()}\n"
+                f"統一編號: {_field_vars['tax_id'].get()}\n"
+                f"聯絡人: {_field_vars['contact_name'].get()}\n"
+                f"手機: {_field_vars['mobile'].get()}\n"
+                f"電話: {_field_vars['phone'].get()}\n"
+                f"FAX: {_field_vars['fax'].get()}\n"
+                f"地址: {_field_vars['address'].get()}\n"
+                f"Mail: {_field_vars['email'].get()}\n"
+                f"客戶詢價來源: LINE官方帳號\n\n"
+                f"原始訊息：\n{row['message']}"
             )
 
             status_bar.configure(text="⏳  正在建立 Trello 卡片…", text_color="#e67e22")
@@ -438,8 +510,11 @@ class _LineTab:
                     cards = [{"title": card_title, "desc": card_desc, "notes": ""}]
                     create_cards(cards, api_key, token)
                     _update_status(inquiry_id, "已建卡")
-                    _push_status_to_server(inquiry_id, "已建卡",
-                                           inquiry_type=type_var.get())
+                    _push_status_to_server(
+                        inquiry_id, "已建卡",
+                        inquiry_type=type_var.get(),
+                        extra={k: v.get() for k, v in _field_vars.items()},
+                    )
                     self.after(0, lambda: _on_create_success())
                 except Exception as e:
                     self.after(0, lambda err=e: _on_create_error(err))

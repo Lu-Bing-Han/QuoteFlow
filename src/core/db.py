@@ -68,16 +68,47 @@ def init_db():
             -- LINE 顧客詢問
             CREATE TABLE IF NOT EXISTS line_inquiries (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                line_user_id    TEXT    NOT NULL,           -- LINE user ID
-                display_name    TEXT    DEFAULT '未知顧客', -- LINE 顯示名稱
-                message         TEXT    NOT NULL,           -- 訊息內容
-                inquiry_type    TEXT    DEFAULT '未分類',   -- 新產品 / 維修 / 其他
-                status          TEXT    DEFAULT '待處理',   -- 待處理 / 已建卡 / 已忽略
-                trello_card_id  TEXT,                       -- 建卡後的 Trello card ID
+                line_user_id    TEXT    NOT NULL,
+                display_name    TEXT    DEFAULT '未知顧客',
+                message         TEXT    NOT NULL,
+                inquiry_type    TEXT    DEFAULT '未分類',
+                status          TEXT    DEFAULT '待處理',
+                trello_card_id  TEXT,
+                company_name    TEXT    DEFAULT '',
+                tax_id          TEXT    DEFAULT '',
+                contact_name    TEXT    DEFAULT '',
+                mobile          TEXT    DEFAULT '',
+                phone           TEXT    DEFAULT '',
+                fax             TEXT    DEFAULT '',
+                address         TEXT    DEFAULT '',
+                email           TEXT    DEFAULT '',
+                inquiry_product TEXT    DEFAULT '',
+                area            TEXT    DEFAULT '',
                 created_at      TEXT    DEFAULT (datetime('now','localtime')),
                 updated_at      TEXT    DEFAULT (datetime('now','localtime'))
             );
         """)
+        conn.commit()
+        # 相容舊版 DB：若新欄位不存在則補上
+        new_cols = [
+            ("company_name",    "TEXT DEFAULT ''"),
+            ("tax_id",          "TEXT DEFAULT ''"),
+            ("contact_name",    "TEXT DEFAULT ''"),
+            ("mobile",          "TEXT DEFAULT ''"),
+            ("phone",           "TEXT DEFAULT ''"),
+            ("fax",             "TEXT DEFAULT ''"),
+            ("address",         "TEXT DEFAULT ''"),
+            ("email",           "TEXT DEFAULT ''"),
+            ("inquiry_product", "TEXT DEFAULT ''"),
+            ("area",            "TEXT DEFAULT ''"),
+        ]
+        for col, typedef in new_cols:
+            try:
+                conn.execute(
+                    f"ALTER TABLE line_inquiries ADD COLUMN {col} {typedef}"
+                )
+            except Exception:
+                pass
         conn.commit()
     finally:
         conn.close()
