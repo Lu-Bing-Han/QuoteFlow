@@ -279,10 +279,6 @@ def webhook():
         c.commit()
         c.close()
 
-        _reply(reply_token,
-               f"您好 {display_name}，感謝您的詢問！\n"
-               "我們的客服人員將盡快確認並與您聯繫，請稍候。")
-
     return "OK", 200
 
 
