@@ -37,7 +37,7 @@ _EMPTY_INFO = {
     "area":            "",
 }
 
-_GEMINI_MODEL = "gemini-1.5-flash"
+_GEMINI_MODEL = "gemini-2.5-flash"
 
 _FIELD_PROMPT = """欄位說明：
 - company_name：公司名稱
@@ -126,8 +126,7 @@ def _parse_json(text: str) -> dict:
 
 def _gemini_client():
     from google import genai
-    return genai.Client(api_key=GEMINI_API_KEY,
-                        http_options={"api_version": "v1"})
+    return genai.Client(api_key=GEMINI_API_KEY)
 
 
 def _extract_info(message: str) -> dict:
