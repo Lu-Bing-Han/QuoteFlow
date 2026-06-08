@@ -153,7 +153,8 @@ def _download_image(message_id: str) -> bytes | None:
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.read()
-    except Exception:
+    except Exception as e:
+        print(f"[Download image ERROR] {type(e).__name__}: {e}", flush=True)
         return None
 
 
@@ -203,7 +204,8 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
             text = text.split("```")[0]
         result = json.loads(text.strip())
         return {k: str(result.get(k, "")).strip() for k in _EMPTY_INFO}
-    except Exception:
+    except Exception as e:
+        print(f"[Gemini image ERROR] {type(e).__name__}: {e}", flush=True)
         return dict(_EMPTY_INFO)
 
 
