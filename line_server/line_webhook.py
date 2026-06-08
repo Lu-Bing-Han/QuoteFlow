@@ -124,13 +124,18 @@ def _parse_json(text: str) -> dict:
     return {k: str(result.get(k, "")).strip() for k in _EMPTY_INFO}
 
 
+def _gemini_client():
+    from google import genai
+    return genai.Client(api_key=GEMINI_API_KEY,
+                        http_options={"api_version": "v1"})
+
+
 def _extract_info(message: str) -> dict:
     """從文字訊息提取結構化資訊。"""
     if not GEMINI_API_KEY:
         return dict(_EMPTY_INFO)
     try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _gemini_client()
         prompt = (
             "你是一個資料提取助手。從以下顧客 LINE 訊息中提取資訊，以 JSON 格式回傳。\n"
             "找不到的欄位填空字串 \"\"，不要猜測或捏造資料。\n\n"
@@ -166,7 +171,6 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
     try:
         import io
         import PIL.Image
-        from google import genai
         from google.genai import types
 
         # 統一轉成 JPEG，相容 JFIF / PNG / WebP 等格式
@@ -174,7 +178,7 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _gemini_client()
         prompt = (
             "從這張圖片中提取聯絡資訊（名片、文件等），以 JSON 格式回傳。\n"
             "找不到的欄位填空字串 \"\"，不要猜測或捏造資料。\n\n"
