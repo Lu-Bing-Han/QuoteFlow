@@ -132,6 +132,7 @@ def _gemini_client():
 def _extract_info(message: str) -> dict:
     """從文字訊息提取結構化資訊。"""
     if not GEMINI_API_KEY:
+        print("[Gemini text SKIP] GEMINI_API_KEY 未設定", flush=True)
         return dict(_EMPTY_INFO)
     try:
         client = _gemini_client()
@@ -142,6 +143,7 @@ def _extract_info(message: str) -> dict:
             + f"\n\n顧客訊息：\n{message}"
         )
         resp = client.models.generate_content(model=_GEMINI_MODEL, contents=prompt)
+        print(f"[Gemini text RAW] {resp.text!r}", flush=True)
         return _parse_json(resp.text)
     except Exception as e:
         print(f"[Gemini text ERROR] {type(e).__name__}: {e}", flush=True)
@@ -165,7 +167,11 @@ def _download_image(message_id: str) -> bytes | None:
 
 def _extract_info_from_image(image_bytes: bytes) -> dict:
     """從圖片（名片等）提取結構化資訊。"""
-    if not GEMINI_API_KEY or not image_bytes:
+    if not GEMINI_API_KEY:
+        print("[Gemini image SKIP] GEMINI_API_KEY 未設定", flush=True)
+        return dict(_EMPTY_INFO)
+    if not image_bytes:
+        print("[Gemini image SKIP] 圖片下載失敗，image_bytes 為空", flush=True)
         return dict(_EMPTY_INFO)
     try:
         import io
@@ -190,6 +196,7 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
                 types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"),
             ],
         )
+        print(f"[Gemini image RAW] {resp.text!r}", flush=True)
         return _parse_json(resp.text)
     except Exception as e:
         print(f"[Gemini image ERROR] {type(e).__name__}: {e}", flush=True)
