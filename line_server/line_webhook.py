@@ -162,10 +162,12 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
     if not GEMINI_API_KEY or not image_bytes:
         return dict(_EMPTY_INFO)
     try:
+        import io
+        import PIL.Image
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        image_part = {"mime_type": "image/jpeg", "data": image_bytes}
+        model  = genai.GenerativeModel("gemini-1.5-flash")
+        image  = PIL.Image.open(io.BytesIO(image_bytes))
         prompt = """從這張圖片中提取聯絡資訊（名片、文件等），以 JSON 格式回傳。
 找不到的欄位填空字串 ""，不要猜測或捏造資料。
 
@@ -182,7 +184,7 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
 - area：公司所在市區（如「台北市」「新北市」「台中市」）
 
 只回傳 JSON 物件，不要包含 markdown 或其他文字。"""
-        resp = model.generate_content([prompt, image_part])
+        resp = model.generate_content([prompt, image])
         text = resp.text.strip()
         if "```" in text:
             text = text.split("```")[1]
