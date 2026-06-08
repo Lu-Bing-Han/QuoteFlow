@@ -37,6 +37,22 @@ _EMPTY_INFO = {
     "area":            "",
 }
 
+_GEMINI_MODEL = "gemini-2.0-flash"
+
+_FIELD_PROMPT = """欄位說明：
+- company_name：公司名稱
+- tax_id：統一編號（8位數字）
+- contact_name：聯絡人姓名
+- mobile：手機號碼（09開頭）
+- phone：市話號碼
+- fax：傳真號碼
+- address：地址
+- email：電子郵件
+- inquiry_product：詢價或維修的商品名稱/型號
+- area：公司所在市區（如「台北市」「新北市」「台中市」）
+
+只回傳 JSON 物件，不要包含 markdown 或其他文字。"""
+
 
 # ── 資料庫 ────────────────────────────────────────────────────
 
@@ -71,7 +87,6 @@ def _init_db():
             updated_at      TEXT    DEFAULT (datetime('now','localtime'))
         );
     """)
-    # 相容舊版 DB：若欄位不存在則補上
     new_cols = [
         ("company_name",    "TEXT DEFAULT ''"),
         ("tax_id",          "TEXT DEFAULT ''"),
@@ -98,53 +113,39 @@ _init_db()
 
 # ── Gemini 辨識 ───────────────────────────────────────────────
 
+def _parse_json(text: str) -> dict:
+    text = text.strip()
+    if "```" in text:
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.split("```")[0]
+    result = json.loads(text.strip())
+    return {k: str(result.get(k, "")).strip() for k in _EMPTY_INFO}
+
+
 def _extract_info(message: str) -> dict:
-    """呼叫 Gemini 從訊息中提取結構化資訊，辨識不到的欄位回傳空字串。"""
+    """從文字訊息提取結構化資訊。"""
     if not GEMINI_API_KEY:
         return dict(_EMPTY_INFO)
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        prompt = f"""你是一個資料提取助手。從以下顧客 LINE 訊息中提取資訊，以 JSON 格式回傳。
-找不到的欄位填空字串 ""，不要猜測或捏造資料。
-
-欄位說明：
-- company_name：公司名稱
-- tax_id：統一編號（8位數字）
-- contact_name：聯絡人姓名
-- mobile：手機號碼（09開頭）
-- phone：市話號碼
-- fax：傳真號碼
-- address：地址
-- email：電子郵件
-- inquiry_product：詢價或維修的商品名稱/型號
-- area：公司所在市區（如「台北市」「新北市」「台中市」）
-
-顧客訊息：
-{message}
-
-只回傳 JSON 物件，不要包含 markdown 或其他文字。"""
-
-        resp = model.generate_content(prompt)
-        text = resp.text.strip()
-        # 移除可能的 markdown code block
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.split("```")[0]
-        result = json.loads(text.strip())
-        # 確保所有欄位都存在
-        return {k: str(result.get(k, "")).strip() for k in _EMPTY_INFO}
-    except Exception:
+        from google import genai
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        prompt = (
+            "你是一個資料提取助手。從以下顧客 LINE 訊息中提取資訊，以 JSON 格式回傳。\n"
+            "找不到的欄位填空字串 \"\"，不要猜測或捏造資料。\n\n"
+            + _FIELD_PROMPT
+            + f"\n\n顧客訊息：\n{message}"
+        )
+        resp = client.models.generate_content(model=_GEMINI_MODEL, contents=prompt)
+        return _parse_json(resp.text)
+    except Exception as e:
+        print(f"[Gemini text ERROR] {type(e).__name__}: {e}", flush=True)
         return dict(_EMPTY_INFO)
 
 
-# ── 圖片下載與辨識 ───────────────────────────────────────────
-
 def _download_image(message_id: str) -> bytes | None:
-    """從 LINE Content API 下載圖片，回傳 bytes。"""
+    """從 LINE Content API 下載圖片。"""
     import urllib.request
     req = urllib.request.Request(
         f"https://api-data.line.me/v2/bot/message/{message_id}/content",
@@ -159,51 +160,34 @@ def _download_image(message_id: str) -> bytes | None:
 
 
 def _extract_info_from_image(image_bytes: bytes) -> dict:
-    """用 Gemini Vision 從圖片（名片等）提取結構化資訊。"""
+    """從圖片（名片等）提取結構化資訊。"""
     if not GEMINI_API_KEY or not image_bytes:
         return dict(_EMPTY_INFO)
     try:
-        import base64, io
+        import io
         import PIL.Image
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        from google.genai import types
 
         # 統一轉成 JPEG，相容 JFIF / PNG / WebP 等格式
         img = PIL.Image.open(io.BytesIO(image_bytes)).convert("RGB")
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
-        image_part = {
-            "inline_data": {
-                "mime_type": "image/jpeg",
-                "data": base64.b64encode(buf.getvalue()).decode(),
-            }
-        }
-        prompt = """從這張圖片中提取聯絡資訊（名片、文件等），以 JSON 格式回傳。
-找不到的欄位填空字串 ""，不要猜測或捏造資料。
 
-欄位說明：
-- company_name：公司名稱
-- tax_id：統一編號（8位數字）
-- contact_name：聯絡人姓名
-- mobile：手機號碼（09開頭）
-- phone：市話號碼
-- fax：傳真號碼
-- address：地址
-- email：電子郵件
-- inquiry_product：詢價或維修的商品名稱/型號
-- area：公司所在市區（如「台北市」「新北市」「台中市」）
-
-只回傳 JSON 物件，不要包含 markdown 或其他文字。"""
-        resp = model.generate_content([prompt, image_part])
-        text = resp.text.strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.split("```")[0]
-        result = json.loads(text.strip())
-        return {k: str(result.get(k, "")).strip() for k in _EMPTY_INFO}
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        prompt = (
+            "從這張圖片中提取聯絡資訊（名片、文件等），以 JSON 格式回傳。\n"
+            "找不到的欄位填空字串 \"\"，不要猜測或捏造資料。\n\n"
+            + _FIELD_PROMPT
+        )
+        resp = client.models.generate_content(
+            model=_GEMINI_MODEL,
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"),
+            ],
+        )
+        return _parse_json(resp.text)
     except Exception as e:
         print(f"[Gemini image ERROR] {type(e).__name__}: {e}", flush=True)
         return dict(_EMPTY_INFO)
@@ -229,26 +213,6 @@ def _get_display_name(user_id: str) -> str:
         return "未知顧客"
 
 
-def _reply(reply_token: str, text: str):
-    import urllib.request
-    data = json.dumps({
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}],
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.line.me/v2/bot/message/reply",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {CHANNEL_TOKEN}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
-
-
 # ── Webhook ───────────────────────────────────────────────────
 
 @app.route("/webhook", methods=["POST"])
@@ -264,7 +228,6 @@ def webhook():
         msg          = event.get("message", {})
         msg_type     = msg.get("type")
         user_id      = event["source"]["userId"]
-        reply_token  = event["replyToken"]
         display_name = _get_display_name(user_id)
 
         if msg_type == "text":
