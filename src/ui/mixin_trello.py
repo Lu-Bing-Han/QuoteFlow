@@ -843,6 +843,15 @@ class _TrelloTab:
                        font=FONT_S, width=56, height=28, corner_radius=4
                        ).pack(side="left", padx=(0, 8))
 
+        ctk.CTkLabel(src_row, text="工作表：",
+                      fg_color="transparent", font=FONT_S, text_color=GRAY
+                      ).pack(side="left")
+        sheet_var = tk.StringVar(value="收款紀錄")
+        sheet_cb = ttk.Combobox(src_row, textvariable=sheet_var, font=FONT_S,
+                                 state="readonly", width=10,
+                                 values=["收款紀錄", "支票收款"])
+        sheet_cb.pack(side="left", padx=(4, 10))
+
         fetch_status = ctk.CTkLabel(src_row, text="", fg_color="transparent",
                                      font=FONT_S, text_color=GRAY)
         fetch_status.pack(side="left")
@@ -928,7 +937,7 @@ class _TrelloTab:
             def _run():
                 try:
                     from sync.syncer_accounting import read_payment_records
-                    records = read_payment_records(Path(p), sheet_name="收款紀錄")
+                    records = read_payment_records(Path(p), sheet_name=sheet_var.get())
                     # 日期由大到小排序
                     records.sort(key=lambda r: r["date_sort_key"], reverse=True)
                     def _done(r=records):

@@ -55,6 +55,7 @@ from ui.mixin_label     import _LabelTab
 from ui.mixin_schedule  import _ScheduleTab
 from ui.mixin_trello    import _TrelloTab
 from ui.mixin_history   import _HistoryTab
+from ui.mixin_line      import _LineTab
 
 # ── Core imports ──────────────────────────────────────────
 from core.parser import parse
@@ -87,6 +88,7 @@ class App(
     _ScheduleTab,
     _TrelloTab,
     _HistoryTab,
+    _LineTab,
     ctk.CTk,
 ):
     """Main application window — inherits all mixin tab builders."""
@@ -272,6 +274,7 @@ class App(
 
         _nav_group("🗂  記錄查詢")
         _nav_item("報價記錄",     "history")
+        _nav_item("LINE 詢問",    "line")
 
         # ── 建立各頁面內容 ────────────────────────────────────
         self._build_tab_shipping(   _make_page("shipping"),   PAD, FONT, FONTB, BG)
@@ -288,6 +291,7 @@ class App(
         self._build_tab_download_cards(_make_page("download"),   FONT, FONTB, BG)
         self._build_tab_accounting(    _make_page("accounting"), FONT, FONTB, BG)
         self._build_tab_history(    _make_page("history"),    FONT, FONTB, BG)
+        self._build_tab_line(       _make_page("line"),       FONT, FONTB, BG)
 
         # 預設顯示出貨單
         _show("shipping")

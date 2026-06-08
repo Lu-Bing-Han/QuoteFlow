@@ -64,6 +64,19 @@ def init_db():
                 unit_price  REAL    DEFAULT 0,      -- 單價
                 subtotal    REAL    DEFAULT 0       -- 小計
             );
+
+            -- LINE 顧客詢問
+            CREATE TABLE IF NOT EXISTS line_inquiries (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                line_user_id    TEXT    NOT NULL,           -- LINE user ID
+                display_name    TEXT    DEFAULT '未知顧客', -- LINE 顯示名稱
+                message         TEXT    NOT NULL,           -- 訊息內容
+                inquiry_type    TEXT    DEFAULT '未分類',   -- 新產品 / 維修 / 其他
+                status          TEXT    DEFAULT '待處理',   -- 待處理 / 已建卡 / 已忽略
+                trello_card_id  TEXT,                       -- 建卡後的 Trello card ID
+                created_at      TEXT    DEFAULT (datetime('now','localtime')),
+                updated_at      TEXT    DEFAULT (datetime('now','localtime'))
+            );
         """)
         conn.commit()
     finally:

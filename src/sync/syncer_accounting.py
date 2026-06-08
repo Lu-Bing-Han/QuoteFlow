@@ -98,35 +98,96 @@ def parse_payment_row(text: str) -> dict:
     }
 
 
+def parse_check_row(date_val, e_val: str) -> dict:
+    """解析支票收款 E 欄（格式：客戶 支票 日期 到期日 票號 NT$金額），A 欄提供收到日期。"""
+    text = str(e_val).strip()
+
+    # 日期從 A 欄（收到日期）取得，可能是 datetime 物件或字串
+    date_str      = ""
+    date_sort_key = (0, 0, 0)
+    if date_val:
+        if hasattr(date_val, "year"):
+            yr, mo, dy = date_val.year, date_val.month, date_val.day
+        else:
+            m = re.match(r'(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})', str(date_val))
+            yr = int(m.group(1)) if m else 0
+            mo = int(m.group(2)) if m else 0
+            dy = int(m.group(3)) if m else 0
+        if yr > 0:
+            date_str      = f"{yr}/{mo:02d}/{dy:02d}"
+            date_sort_key = (yr, mo, dy)
+
+    # 客戶名稱：「支票」之前的文字
+    company = ""
+    m_co = re.match(r'^(.+?)支票', text)
+    if m_co:
+        company = m_co.group(1).strip()
+
+    # 金額：NT$X,XXX 或 NT$XXXX
+    amount_str = ""
+    amount     = 0.0
+    m_amt = re.search(r'NT\$([\d,]+)', text)
+    if m_amt:
+        amount_str = m_amt.group(1)
+        try:
+            amount = float(amount_str.replace(",", ""))
+        except ValueError:
+            pass
+
+    return {
+        "raw":            text,
+        "date_str":       date_str,
+        "date_sort_key":  date_sort_key,
+        "amount":         amount,
+        "amount_str":     amount_str,
+        "company":        company,
+    }
+
+
 def read_payment_records(excel_path: Path,
                           sheet_name: str = "收款紀錄") -> list[dict]:
     """
-    讀取 Excel 收款紀錄工作表 D 欄，回傳解析後的列表。
-    每筆記錄額外含 is_original_color：True 表示儲存格背景是預設原色（未標記）。
+    讀取 Excel 收款紀錄或支票收款工作表，回傳解析後的列表。
+    每筆記錄含 is_original_color：True 表示儲存格背景是預設原色（未標記）。
     """
     import openpyxl
-    # 不使用 read_only，才能讀取儲存格樣式（背景色）
     wb = openpyxl.load_workbook(str(excel_path), data_only=True)
     if sheet_name not in wb.sheetnames:
         raise ValueError(
             f"找不到工作表「{sheet_name}」\n可用的工作表：{', '.join(wb.sheetnames)}")
     ws = wb[sheet_name]
     records = []
-    for row in ws.iter_rows(min_row=2):
-        if len(row) < 4:
-            continue
-        d_cell = row[3]     # D 欄（0-based index 3）
-        if not d_cell.value:
-            continue
 
-        # 判斷儲存格背景是否為原色（無填色）
-        fill = d_cell.fill
-        is_original = (fill.fill_type is None or fill.fill_type == "none")
+    if sheet_name == "支票收款":
+        # A=收到日期（index 0）、E=核對狀況（index 4）
+        for row in ws.iter_rows(min_row=2):
+            if len(row) < 5:
+                continue
+            a_cell = row[0]
+            e_cell = row[4]
+            if not e_cell.value:
+                continue
+            fill = e_cell.fill
+            is_original = (fill.fill_type is None or fill.fill_type == "none")
+            parsed = parse_check_row(a_cell.value, str(e_cell.value))
+            if parsed["amount"] > 0:
+                parsed["is_original_color"] = is_original
+                records.append(parsed)
+    else:
+        # 收款紀錄：D 欄（index 3）
+        for row in ws.iter_rows(min_row=2):
+            if len(row) < 4:
+                continue
+            d_cell = row[3]
+            if not d_cell.value:
+                continue
+            fill = d_cell.fill
+            is_original = (fill.fill_type is None or fill.fill_type == "none")
+            parsed = parse_payment_row(str(d_cell.value))
+            if parsed["amount"] > 0:
+                parsed["is_original_color"] = is_original
+                records.append(parsed)
 
-        parsed = parse_payment_row(str(d_cell.value))
-        if parsed["amount"] > 0:
-            parsed["is_original_color"] = is_original
-            records.append(parsed)
     return records
 
 
