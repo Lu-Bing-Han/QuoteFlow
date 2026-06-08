@@ -37,7 +37,7 @@ _EMPTY_INFO = {
     "area":            "",
 }
 
-_GEMINI_MODEL = "gemini-2.0-flash"
+_GEMINI_MODEL = "gemini-1.5-flash"
 
 _FIELD_PROMPT = """欄位說明：
 - company_name：公司名稱
