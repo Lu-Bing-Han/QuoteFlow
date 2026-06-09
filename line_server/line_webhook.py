@@ -37,7 +37,7 @@ _EMPTY_INFO = {
     "area":            "",
 }
 
-_GEMINI_MODEL = "gemini-2.5-flash"
+_GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 _FIELD_PROMPT = """欄位說明：
 - company_name：公司名稱
@@ -129,6 +129,28 @@ def _gemini_client():
     return genai.Client(api_key=GEMINI_API_KEY)
 
 
+def _gemini_generate(client, contents, retries: int = 3, delay: float = 3.0):
+    """呼叫 Gemini，遇到 503 UNAVAILABLE 時自動重試最多 retries 次。"""
+    import time
+    last_err = None
+    for attempt in range(retries):
+        try:
+            return client.models.generate_content(model=_GEMINI_MODEL, contents=contents)
+        except Exception as e:
+            last_err = e
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                # 每日額度耗盡，重試無效
+                raise
+            elif "503" in err_str or "UNAVAILABLE" in err_str:
+                wait = delay * (attempt + 1)
+                print(f"[Gemini RETRY] 第 {attempt+1} 次，等 {wait:.0f}s 後重試…", flush=True)
+                time.sleep(wait)
+            else:
+                raise
+    raise last_err
+
+
 def _extract_info(message: str) -> dict:
     """從文字訊息提取結構化資訊。"""
     if not GEMINI_API_KEY:
@@ -142,7 +164,7 @@ def _extract_info(message: str) -> dict:
             + _FIELD_PROMPT
             + f"\n\n顧客訊息：\n{message}"
         )
-        resp = client.models.generate_content(model=_GEMINI_MODEL, contents=prompt)
+        resp = _gemini_generate(client, prompt)
         print(f"[Gemini text RAW] {resp.text!r}", flush=True)
         return _parse_json(resp.text)
     except Exception as e:
@@ -189,13 +211,10 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
             "找不到的欄位填空字串 \"\"，不要猜測或捏造資料。\n\n"
             + _FIELD_PROMPT
         )
-        resp = client.models.generate_content(
-            model=_GEMINI_MODEL,
-            contents=[
-                prompt,
-                types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"),
-            ],
-        )
+        resp = _gemini_generate(client, [
+            prompt,
+            types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"),
+        ])
         print(f"[Gemini image RAW] {resp.text!r}", flush=True)
         return _parse_json(resp.text)
     except Exception as e:
