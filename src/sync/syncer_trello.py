@@ -44,14 +44,15 @@ def _get_list_id(api_key: str, token: str, board_id: str) -> str:
 
 
 def _parse_desc(desc: str) -> dict:
-    """從卡片描述萃取付款方式、交期、應收總金額。"""
+    """從卡片描述萃取付款方式、交期、應收總金額、下單日期。"""
     def _find(pattern):
         m = re.search(pattern, desc or "", re.MULTILINE)
         return m.group(1).strip() if m else ""
 
-    payment_raw = _find(r'付款方式[：:]\s*(.+)')
-    delivery    = _find(r'交期[：:]\s*(.+)')
-    amount      = _find(r'應收總金額[：:]\s*(.+)')
+    payment_raw    = _find(r'付款方式[：:]\s*(.+)')
+    delivery       = _find(r'交期[：:]\s*(.+)')
+    amount         = _find(r'應收總金額[：:]\s*(.+)')
+    order_date_raw = _find(r'下單日期[\s　]*[：:﹕][\s　]*(.+)')
 
     if "現金" in payment_raw:
         payment_type = "現金"
@@ -62,11 +63,39 @@ def _parse_desc(desc: str) -> dict:
     else:
         payment_type = ""
 
+    order_date_str = ""
+    order_date_dt  = None
+    if order_date_raw:
+        raw = order_date_raw.strip()
+        # 三段式：114/6/8、2025/6/8、2025-06-08
+        m3 = re.match(r'(\d{2,4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})', raw)
+        # 兩段式：6/8、06/08
+        m2 = re.match(r'(\d{1,2})[/\-\.](\d{1,2})', raw)
+        if m3:
+            yr, mo, dy = int(m3.group(1)), int(m3.group(2)), int(m3.group(3))
+            if yr < 200:
+                yr += 1911
+            order_date_str = f"{mo}/{dy}"
+            try:
+                order_date_dt = date_type(yr, mo, dy)
+            except ValueError:
+                pass
+        elif m2:
+            mo, dy = int(m2.group(1)), int(m2.group(2))
+            yr = date_type.today().year
+            order_date_str = f"{mo}/{dy}"
+            try:
+                order_date_dt = date_type(yr, mo, dy)
+            except ValueError:
+                pass
+
     return {
-        "payment_raw":  payment_raw,
-        "payment_type": payment_type,
-        "delivery":     delivery,
-        "amount":       amount,
+        "payment_raw":    payment_raw,
+        "payment_type":   payment_type,
+        "delivery":       delivery,
+        "amount":         amount,
+        "order_date_str": order_date_str,
+        "order_date_dt":  order_date_dt,
     }
 
 
@@ -145,12 +174,17 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
         fields = _parse_title(card["name"])
         desc_data = _parse_desc(card.get("desc", ""))
 
-        created_date, created_dt = _parse_bracket_date(card["name"])
-        if not created_date:
-            ts = int(card["id"][:8], 16)
-            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-            created_date = f"{dt.month}/{dt.day}"
-            created_dt = dt.date()
+        # 優先使用描述裡的下單日期，否則 fallback 到標題括號日期，最後用卡片建立時間
+        if desc_data["order_date_str"]:
+            order_date = desc_data["order_date_str"]
+            order_dt   = desc_data["order_date_dt"]
+        else:
+            order_date, order_dt = _parse_bracket_date(card["name"])
+            if not order_date:
+                ts = int(card["id"][:8], 16)
+                dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+                order_date = f"{dt.month}/{dt.day}"
+                order_dt   = dt.date()
 
         label_names = [lb.get("name", "") for lb in (card.get("labels") or [])]
         has_remodel = "Y" if any("改造" in n for n in label_names) else "N"
@@ -163,8 +197,8 @@ def fetch_po_cards(api_key: str, token: str) -> list[dict]:
             "location":     fields["location"],
             "product":      fields["product"],
             "quantity":     fields["quantity"],
-            "created_date": created_date,
-            "created_dt":   created_dt,
+            "created_date": order_date,
+            "created_dt":   order_dt,
             "due_date":     card.get("due") or "",
             "card_url":     card.get("shortUrl", ""),
             "payment_raw":  desc_data["payment_raw"],

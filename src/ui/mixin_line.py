@@ -85,6 +85,11 @@ class _LineTab:
         _ctk_btn(row, text="🔄  重新整理", command=lambda: _refresh(),
                  width=110, height=28).pack(side="left")
 
+        _ctk_btn(row, text="🗑  清空列表",
+                 fg_color="#7f8c8d", hover_color="#626d72",
+                 width=100, height=28,
+                 command=lambda: _on_clear()).pack(side="left", padx=(8, 0))
+
         count_lbl = ctk.CTkLabel(row, text="", fg_color="transparent",
                                   font=FONT_S, text_color=GRAY)
         count_lbl.pack(side="left", padx=(16, 0))
@@ -128,16 +133,16 @@ class _LineTab:
 
         # ── 上方：唯讀基本資訊 ───────────────────────────────
         info_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
-        info_frame.pack(fill="x", padx=8, pady=(6, 2))
+        info_frame.pack(fill="x", padx=8, pady=(4, 0))
         info_frame.columnconfigure(1, weight=1)
 
         def _info_row(key: str, label: str, row: int):
             ctk.CTkLabel(info_frame, text=label + "：", fg_color="transparent",
                           font=FONT_S, text_color=GRAY, anchor="w"
-                          ).grid(row=row, column=0, sticky="w", pady=2)
+                          ).grid(row=row, column=0, sticky="w", pady=1)
             lbl = ctk.CTkLabel(info_frame, text="—", fg_color="transparent",
                                 font=FONT_S, anchor="w")
-            lbl.grid(row=row, column=1, sticky="w", padx=(4, 0), pady=2)
+            lbl.grid(row=row, column=1, sticky="w", padx=(4, 0), pady=1)
             _detail_labels[key] = lbl
 
         _info_row("display_name", "LINE 名稱", 0)
@@ -147,19 +152,56 @@ class _LineTab:
         # ── 訊息內容 ─────────────────────────────────────────
         ctk.CTkLabel(detail_lf, text="訊息內容：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY, anchor="w"
-                      ).pack(anchor="w", padx=8, pady=(6, 2))
-        msg_box = ctk.CTkTextbox(detail_lf, font=FONT_S, height=70,
+                      ).pack(anchor="w", padx=8, pady=(4, 1))
+        msg_box = ctk.CTkTextbox(detail_lf, font=FONT_S, height=52,
                                   corner_radius=4, border_width=1,
                                   state="disabled", wrap="word")
-        msg_box.pack(fill="x", padx=8, pady=(0, 6))
+        msg_box.pack(fill="x", padx=8, pady=(0, 3))
+
+        btn_history = _ctk_btn(
+            detail_lf, text="📋  查看同顧客歷史詢問",
+            fg_color=GRAY, hover_color="#4d5d6e",
+            width=180, height=26,
+            command=lambda: _on_show_history(),
+        )
+        btn_history.pack(anchor="w", padx=8, pady=(0, 3))
 
         # ── 可捲動的編輯表單 ─────────────────────────────────
         ctk.CTkLabel(detail_lf, text="Gemini 辨識結果（可手動補填）：",
                       fg_color="transparent", font=FONT_S, text_color=GRAY,
-                      anchor="w").pack(anchor="w", padx=8, pady=(2, 2))
+                      anchor="w").pack(anchor="w", padx=8, pady=(1, 1))
 
+        # ── 操作按鈕（固定在底部）────────────────────────────
+        btn_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
+        btn_frame.pack(side="bottom", fill="x", padx=8, pady=(2, 8))
+
+        # ── 類型 + 人員代號（固定在底部）────────────────────
+        bottom_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
+        bottom_frame.pack(side="bottom", fill="x", padx=8, pady=(4, 2))
+        bottom_frame.columnconfigure(1, weight=1)
+        bottom_frame.columnconfigure(3, weight=1)
+
+        ctk.CTkLabel(bottom_frame, text="類型：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).grid(row=0, column=0, sticky="w", pady=3)
+        type_var = tk.StringVar(value="未分類")
+        ctk.CTkOptionMenu(bottom_frame, variable=type_var,
+                           values=["未分類", "新產品詢問", "維修需求", "其他"],
+                           font=FONT_S, width=110, height=26, corner_radius=4
+                           ).grid(row=0, column=1, sticky="w", padx=(2, 8), pady=3)
+
+        ctk.CTkLabel(bottom_frame, text="人員：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).grid(row=0, column=2, sticky="w", pady=3)
+        operators  = self._config.get("operators", [""])
+        op_codes   = self._config.get("operator_codes", {})
+        op_var = tk.StringVar(value=operators[0] if operators else "")
+        ctk.CTkOptionMenu(bottom_frame, variable=op_var,
+                           values=operators if operators else [""],
+                           font=FONT_S, width=80, height=26, corner_radius=4
+                           ).grid(row=0, column=3, sticky="w", padx=(2, 0), pady=3)
+
+        # ── 可捲動的編輯表單（填滿剩餘空間）────────────────
         scroll_frame = ctk.CTkScrollableFrame(detail_lf, fg_color="transparent",
-                                               height=200, corner_radius=0)
+                                               corner_radius=0)
         scroll_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
         scroll_frame.columnconfigure(1, weight=1)
 
@@ -186,49 +228,19 @@ class _LineTab:
         _form_row("email",           "Mail",     8)
         _form_row("inquiry_product", "詢價商品", 9)
 
-        # ── 類型 + 人員代號 ───────────────────────────────────
-        bottom_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
-        bottom_frame.pack(fill="x", padx=8, pady=(4, 2))
-        bottom_frame.columnconfigure(1, weight=1)
-        bottom_frame.columnconfigure(3, weight=1)
-
-        ctk.CTkLabel(bottom_frame, text="類型：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY).grid(row=0, column=0, sticky="w", pady=3)
-        type_var = tk.StringVar(value="未分類")
-        ctk.CTkOptionMenu(bottom_frame, variable=type_var,
-                           values=["未分類", "新產品詢問", "維修需求", "其他"],
-                           font=FONT_S, width=110, height=26, corner_radius=4
-                           ).grid(row=0, column=1, sticky="w", padx=(2, 8), pady=3)
-
-        ctk.CTkLabel(bottom_frame, text="人員：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY).grid(row=0, column=2, sticky="w", pady=3)
-        operators  = self._config.get("operators", [""])
-        op_codes   = self._config.get("operator_codes", {})
-        op_var = tk.StringVar(value=operators[0] if operators else "")
-        ctk.CTkOptionMenu(bottom_frame, variable=op_var,
-                           values=operators if operators else [""],
-                           font=FONT_S, width=80, height=26, corner_radius=4
-                           ).grid(row=0, column=3, sticky="w", padx=(2, 0), pady=3)
-
-        # ── 操作按鈕 ─────────────────────────────────────────
-        btn_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
-        btn_frame.pack(fill="x", padx=8, pady=(2, 8))
-
         btn_create = _ctk_btn(
-            btn_frame, text="✔  建立 Trello 卡片",
+            btn_frame, text="✔  建立卡片",
             fg_color="#117a65", hover_color="#0e6655",
-            width=180, height=34,
-            command=lambda: _on_create_card(),
+            height=34, command=lambda: _on_create_card(),
         )
-        btn_create.pack(fill="x", pady=(0, 6))
+        btn_create.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
         btn_ignore = _ctk_btn(
-            btn_frame, text="✕  忽略此詢問",
+            btn_frame, text="✕  忽略",
             fg_color="#922b21", hover_color="#7b241c",
-            width=180, height=34,
-            command=lambda: _on_ignore(),
+            height=34, command=lambda: _on_ignore(),
         )
-        btn_ignore.pack(fill="x")
+        btn_ignore.pack(side="left", fill="x", expand=True)
 
         # ══════════════════════════════════════════════════════
         #  狀態列（底部）
@@ -241,6 +253,7 @@ class _LineTab:
         #  內部狀態
         # ══════════════════════════════════════════════════════
         _selected_id: list[int] = [0]   # 用 list 讓 closure 可寫入
+        _selected_user: list[str] = [""]
 
         def _get_trello_creds() -> tuple[str, str]:
             tr_cfg = self._config.get("trello", {})
@@ -270,22 +283,29 @@ class _LineTab:
             from core.db import get_connection
             conn = get_connection()
             try:
+                struct_fields = [
+                    "company_name", "tax_id", "contact_name", "mobile", "phone",
+                    "fax", "address", "email", "inquiry_product", "area",
+                ]
                 for r in rows:
-                    conn.execute("""
+                    conn.execute(f"""
                         INSERT INTO line_inquiries
                             (id, line_user_id, display_name, message,
-                             inquiry_type, status, trello_card_id, created_at, updated_at)
-                        VALUES (?,?,?,?,?,?,?,?,?)
+                             inquiry_type, status, trello_card_id, created_at, updated_at,
+                             {", ".join(struct_fields)})
+                        VALUES (?,?,?,?,?,?,?,?,?,{",".join("?" * len(struct_fields))})
                         ON CONFLICT(id) DO UPDATE SET
                             display_name   = excluded.display_name,
                             message        = excluded.message,
                             inquiry_type   = excluded.inquiry_type,
                             status         = excluded.status,
                             trello_card_id = excluded.trello_card_id,
-                            updated_at     = excluded.updated_at
+                            updated_at     = excluded.updated_at,
+                            {", ".join(f"{f} = excluded.{f}" for f in struct_fields)}
                     """, (r["id"], r["line_user_id"], r["display_name"], r["message"],
                           r["inquiry_type"], r["status"], r.get("trello_card_id"),
-                          r["created_at"], r["updated_at"]))
+                          r["created_at"], r["updated_at"],
+                          *[r.get(f, "") or "" for f in struct_fields]))
                 conn.commit()
             finally:
                 conn.close()
@@ -395,11 +415,15 @@ class _LineTab:
             msg_box.delete("1.0", "end")
             msg_box.configure(state="disabled")
             _selected_id[0] = 0
+            _selected_user[0] = ""
             btn_create.configure(state="disabled")
             btn_ignore.configure(state="disabled")
+            btn_history.configure(state="disabled")
 
         def _show_detail(row_data: dict):
             _selected_id[0] = row_data["id"]
+            _selected_user[0] = row_data.get("line_user_id", "")
+            btn_history.configure(state="normal")
             _detail_labels["display_name"].configure(text=row_data["display_name"])
             _detail_labels["created_at"].configure(text=row_data["created_at"][:16])
 
@@ -504,11 +528,21 @@ class _LineTab:
             status_bar.configure(text="⏳  正在建立 Trello 卡片…", text_color="#e67e22")
             btn_create.configure(state="disabled")
 
+            _inq_type = type_var.get()
+
             def _do_create():
                 try:
-                    from sync.creator_trello import create_cards
+                    from sync.creator_trello import (
+                        create_cards, _REPAIR_BOARD, _REPAIR_LIST,
+                        _BOARD_NAME, _LIST_NAME,
+                    )
                     cards = [{"title": card_title, "desc": card_desc, "notes": ""}]
-                    create_cards(cards, api_key, token)
+                    if _inq_type == "維修需求":
+                        create_cards(cards, api_key, token,
+                                     board_name=_REPAIR_BOARD, list_name=_REPAIR_LIST)
+                    else:
+                        create_cards(cards, api_key, token,
+                                     board_name=_BOARD_NAME, list_name=_LIST_NAME)
                     _update_status(inquiry_id, "已建卡")
                     _push_status_to_server(
                         inquiry_id, "已建卡",
@@ -546,9 +580,118 @@ class _LineTab:
             status_bar.configure(text="已忽略此筆詢問", text_color=GRAY)
             _refresh()
 
+        # ══════════════════════════════════════════════════════
+        #  清空目前顯示的紀錄
+        # ══════════════════════════════════════════════════════
+        def _on_clear():
+            items = tree.get_children()
+            if not items:
+                return
+            ids = [int(tree.item(i)["tags"][0]) for i in items]
+            if not messagebox.askyesno(
+                "確認清空",
+                f"確定要刪除目前顯示的 {len(ids)} 筆詢問紀錄？\n此操作無法復原。",
+                parent=self,
+            ):
+                return
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                placeholders = ",".join("?" * len(ids))
+                conn.execute(
+                    f"DELETE FROM line_inquiries WHERE id IN ({placeholders})", ids
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            status_bar.configure(text=f"已刪除 {len(ids)} 筆紀錄", text_color=GRAY)
+            _refresh()
+
+        # ══════════════════════════════════════════════════════
+        #  同顧客歷史詢問（資訊分散在多則訊息時，方便人工拼湊）
+        # ══════════════════════════════════════════════════════
+        _STRUCT_LABELS = [
+            ("company_name",    "公司"),
+            ("tax_id",          "統編"),
+            ("contact_name",    "聯絡人"),
+            ("mobile",          "手機"),
+            ("phone",           "電話"),
+            ("fax",             "FAX"),
+            ("address",         "地址"),
+            ("email",           "Mail"),
+            ("inquiry_product", "詢價商品"),
+            ("area",            "區域"),
+        ]
+
+        def _show_customer_history(user_id: str, name: str, current_id: int):
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                rows = [dict(r) for r in conn.execute(
+                    "SELECT * FROM line_inquiries WHERE line_user_id=? "
+                    "ORDER BY created_at ASC",
+                    (user_id,)
+                ).fetchall()]
+            finally:
+                conn.close()
+
+            dlg = ctk.CTkToplevel(self)
+            dlg.title(f"同顧客歷史詢問 — {name}")
+            dlg.configure(fg_color=BG)
+            dlg.after(100, dlg.grab_set)
+            dlg.geometry("640x540")
+
+            ctk.CTkLabel(
+                dlg,
+                text=f"共 {len(rows)} 筆歷史詢問（依時間排序，可參考各則內容人工拼湊完整資料）",
+                fg_color="transparent", font=FONT_S, text_color=GRAY,
+            ).pack(anchor="w", padx=16, pady=(12, 4))
+
+            scroll = ctk.CTkScrollableFrame(dlg, fg_color="transparent", corner_radius=0)
+            scroll.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+            for r in rows:
+                title = f"{r['created_at'][:16]}　[{r['status']}]"
+                if r["id"] == current_id:
+                    title += "　← 目前檢視這筆"
+                card_outer, card_lf = _mk_lf(scroll, title, BG, FONTB)
+                card_outer.pack(fill="x", padx=4, pady=4)
+
+                msg_preview = r["message"][:200]
+                ctk.CTkLabel(card_lf, text=msg_preview, fg_color="transparent",
+                              font=FONT_S, anchor="w", justify="left",
+                              wraplength=560
+                              ).pack(anchor="w", padx=8, pady=(4, 2))
+
+                bits = [f"{lbl}: {r.get(key)}" for key, lbl in _STRUCT_LABELS if r.get(key)]
+                if bits:
+                    ctk.CTkLabel(card_lf, text="　|　".join(bits),
+                                  fg_color="transparent", font=FONT_S,
+                                  text_color="#1e8449", anchor="w", justify="left",
+                                  wraplength=560
+                                  ).pack(anchor="w", padx=8, pady=(0, 6))
+                else:
+                    ctk.CTkLabel(card_lf, text="（未辨識出結構化資訊）",
+                                  fg_color="transparent", font=FONT_S,
+                                  text_color=GRAY, anchor="w"
+                                  ).pack(anchor="w", padx=8, pady=(0, 6))
+
+            ctk.CTkButton(dlg, text="關閉", command=dlg.destroy,
+                           fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                           font=FONT, width=100, height=34, corner_radius=6
+                           ).pack(pady=(0, 10))
+
+        def _on_show_history():
+            user_id = _selected_user[0]
+            if not user_id:
+                return
+            name = _detail_labels["display_name"].cget("text")
+            _show_customer_history(user_id, name, _selected_id[0])
+
         # 初始狀態：按鈕停用，等待選取
         btn_create.configure(state="disabled")
         btn_ignore.configure(state="disabled")
+        btn_history.configure(state="disabled")
 
         # 首次載入
         _refresh()

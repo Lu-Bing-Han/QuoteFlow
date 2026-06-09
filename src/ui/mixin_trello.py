@@ -106,14 +106,18 @@ class _TrelloTab:
                                      font=FONT_S, text_color=GRAY)
         fetch_status.pack(side="left", padx=(8, 0))
 
-        ctk.CTkLabel(fetch_row, text="近", fg_color="transparent",
+        ctk.CTkLabel(fetch_row, text="下單日期 從：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).pack(side="left", padx=(8, 2))
-        days_var = tk.StringVar(value="7")
-        ctk.CTkEntry(fetch_row, textvariable=days_var, font=FONT_S,
-                      width=40, height=28, corner_radius=4,
-                      justify="center").pack(side="left")
-        ctk.CTkLabel(fetch_row, text="天", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(2, 0))
+        from tkcalendar import DateEntry
+        from datetime import date as _dt_cls
+        date_entry = DateEntry(fetch_row, width=10, date_pattern='y/m/d',
+                                font=FONT_S, maxdate=_dt_cls.today())
+        date_entry.pack(side="left", padx=(0, 2))
+        ctk.CTkButton(fetch_row, text="全部",
+                       command=lambda: _show_all(),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=50, height=28, corner_radius=4
+                       ).pack(side="left", padx=(2, 0))
 
         def _render_tree(cards: list[dict]):
             _displayed_cards.clear()
@@ -132,17 +136,18 @@ class _TrelloTab:
                 text=f"  本周下單卡片（共 {len(cards)} 張，可多選）  ")
 
         def _apply_days_filter():
-            from datetime import date, timedelta
-            try:
-                n = int(days_var.get())
-            except ValueError:
-                n = 7
-            cutoff = date.today() - timedelta(days=n)
+            from_date = date_entry.get_date()
             filtered = [c for c in _all_cards
-                        if c.get("created_dt") and c["created_dt"] >= cutoff]
+                        if c.get("created_dt") and c["created_dt"] >= from_date]
             _render_tree(filtered)
             fetch_status.configure(
-                text=f"✔  共 {len(_all_cards)} 張，顯示近 {n} 天 {len(filtered)} 張",
+                text=f"✔  共 {len(_all_cards)} 張，篩選後 {len(filtered)} 張",
+                text_color=GREEN)
+
+        def _show_all():
+            _render_tree(_all_cards)
+            fetch_status.configure(
+                text=f"✔  共 {len(_all_cards)} 張（全部顯示）",
                 text_color=GREEN)
 
         def _fetch():
@@ -208,6 +213,50 @@ class _TrelloTab:
         tree.configure(yscrollcommand=vsb.set)
         tree.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
+
+        # ── 拖曳框選 ──────────────────────────────────────
+        _drag_anchor = [None]
+
+        def _on_press(event):
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            _drag_anchor[0] = item
+            tree.selection_set(item)
+
+        def _on_ctrl_press(event):
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            _drag_anchor[0] = None
+            if item in tree.selection():
+                tree.selection_remove(item)
+            else:
+                tree.selection_add(item)
+            return "break"
+
+        def _on_drag(event):
+            if not _drag_anchor[0]:
+                return
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            all_items = tree.get_children()
+            try:
+                a = all_items.index(_drag_anchor[0])
+                b = all_items.index(item)
+            except ValueError:
+                return
+            lo, hi = min(a, b), max(a, b)
+            tree.selection_set(all_items[lo:hi + 1])
+
+        def _on_release(event):
+            _drag_anchor[0] = None
+
+        tree.bind("<Button-1>",         _on_press)
+        tree.bind("<Control-Button-1>", _on_ctrl_press)
+        tree.bind("<B1-Motion>",        _on_drag)
+        tree.bind("<ButtonRelease-1>",  _on_release)
 
         # ── 全選 / 取消全選 ───────────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
@@ -420,6 +469,17 @@ class _TrelloTab:
             _drag_anchor[0] = item
             tree.selection_set(item)
 
+        def _on_ctrl_press(event):
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            _drag_anchor[0] = None
+            if item in tree.selection():
+                tree.selection_remove(item)
+            else:
+                tree.selection_add(item)
+            return "break"
+
         def _on_drag(event):
             if not _drag_anchor[0]:
                 return
@@ -438,9 +498,10 @@ class _TrelloTab:
         def _on_release(event):
             _drag_anchor[0] = None
 
-        tree.bind("<Button-1>",        _on_press)
-        tree.bind("<B1-Motion>",       _on_drag)
-        tree.bind("<ButtonRelease-1>", _on_release)
+        tree.bind("<Button-1>",         _on_press)
+        tree.bind("<Control-Button-1>", _on_ctrl_press)
+        tree.bind("<B1-Motion>",        _on_drag)
+        tree.bind("<ButtonRelease-1>",  _on_release)
 
         # ── 全選 / 取消全選 ───────────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
@@ -630,6 +691,17 @@ class _TrelloTab:
             _drag_anchor[0] = item
             tree.selection_set(item)
 
+        def _on_ctrl_press(event):
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            _drag_anchor[0] = None
+            if item in tree.selection():
+                tree.selection_remove(item)
+            else:
+                tree.selection_add(item)
+            return "break"
+
         def _on_drag(event):
             if not _drag_anchor[0]:
                 return
@@ -648,9 +720,10 @@ class _TrelloTab:
         def _on_release(event):
             _drag_anchor[0] = None
 
-        tree.bind("<Button-1>",        _on_press)
-        tree.bind("<B1-Motion>",       _on_drag)
-        tree.bind("<ButtonRelease-1>", _on_release)
+        tree.bind("<Button-1>",         _on_press)
+        tree.bind("<Control-Button-1>", _on_ctrl_press)
+        tree.bind("<B1-Motion>",        _on_drag)
+        tree.bind("<ButtonRelease-1>",  _on_release)
 
         # ── 全選 / 取消全選 ───────────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
@@ -1002,6 +1075,17 @@ class _TrelloTab:
             _drag_anchor[0] = item
             tree.selection_set(item)
 
+        def _on_ctrl_press(event):
+            item = tree.identify_row(event.y)
+            if not item:
+                return
+            _drag_anchor[0] = None
+            if item in tree.selection():
+                tree.selection_remove(item)
+            else:
+                tree.selection_add(item)
+            return "break"
+
         def _on_drag(event):
             if not _drag_anchor[0]:
                 return
@@ -1020,9 +1104,10 @@ class _TrelloTab:
         def _on_release(event):
             _drag_anchor[0] = None
 
-        tree.bind("<Button-1>",        _on_press)
-        tree.bind("<B1-Motion>",       _on_drag)
-        tree.bind("<ButtonRelease-1>", _on_release)
+        tree.bind("<Button-1>",         _on_press)
+        tree.bind("<Control-Button-1>", _on_ctrl_press)
+        tree.bind("<B1-Motion>",        _on_drag)
+        tree.bind("<ButtonRelease-1>",  _on_release)
 
         # ── 全選 / 取消全選 ───────────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
