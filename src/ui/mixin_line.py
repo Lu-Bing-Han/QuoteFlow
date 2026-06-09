@@ -100,28 +100,118 @@ class _LineTab:
         body = tk.Frame(parent, bg=BG)
         body.pack(fill="both", expand=True, padx=12, pady=(0, 8))
 
-        # ── 左：詢問列表 ──────────────────────────────────────
+        # ── 左：詢問列表（聊天式卡片）────────────────────────
         list_outer, list_lf = _mk_lf(body, "詢問列表", BG, FONTB)
         list_outer.pack(side="left", fill="both", expand=True, padx=(0, 6))
 
-        cols = ("created_at", "display_name", "inquiry_type", "status", "message")
-        tree = ttk.Treeview(list_lf, columns=cols, show="headings",
-                             selectmode="browse")
-        tree.heading("created_at",   text="時間")
-        tree.heading("display_name", text="顧客名稱")
-        tree.heading("inquiry_type", text="類型")
-        tree.heading("status",       text="狀態")
-        tree.heading("message",      text="訊息摘要")
-        tree.column("created_at",   width=130, anchor="center")
-        tree.column("display_name", width=100, anchor="w")
-        tree.column("inquiry_type", width=70,  anchor="center")
-        tree.column("status",       width=60,  anchor="center")
-        tree.column("message",      width=200, anchor="w")
+        cards_scroll = ctk.CTkScrollableFrame(list_lf, fg_color="#f7f7f7",
+                                               corner_radius=0)
+        cards_scroll.pack(fill="both", expand=True, padx=0, pady=0)
 
-        sb = ctk.CTkScrollbar(list_lf, orientation="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=sb.set)
-        sb.pack(side="right", fill="y")
-        tree.pack(fill="both", expand=True, padx=4, pady=4)
+        _card_frames: dict[int, tk.Frame] = {}
+
+        _AVATAR_COLORS = ["#2e86c1","#117a65","#8e44ad","#d35400",
+                          "#c0392b","#1a5276","#0e6655","#784212"]
+
+        def _avatar_color(name: str) -> str:
+            return _AVATAR_COLORS[sum(ord(c) for c in (name or "?")) % len(_AVATAR_COLORS)]
+
+        def _set_bg_all(widget, color: str):
+            try: widget.configure(bg=color)
+            except Exception: pass
+            for child in widget.winfo_children():
+                _set_bg_all(child, color)
+
+        def _build_card(inquiry: dict) -> tk.Frame:
+            name    = inquiry.get("display_name") or "未知顧客"
+            status  = inquiry.get("status", "待處理")
+            t       = (inquiry.get("created_at") or "")[:16]
+            msg     = (inquiry.get("message") or "").replace("\n", " ")
+            preview = (msg[:34] + "…") if len(msg) > 34 else msg
+            itype   = inquiry.get("inquiry_type") or ""
+            stat_color = _STATUS_COLOR.get(status, GRAY)
+            av_color   = _avatar_color(name)
+            CBG = "#ffffff"
+
+            card = tk.Frame(cards_scroll, bg=CBG, cursor="hand2")
+            card.pack(fill="x", padx=0, pady=0)
+
+            # Avatar
+            SZ = 46
+            av = tk.Canvas(card, width=SZ, height=SZ,
+                           bg=CBG, highlightthickness=0)
+            av.pack(side="left", padx=(12, 8), pady=10)
+            av.create_oval(2, 2, SZ-2, SZ-2, fill=av_color, outline="")
+            av.create_text(SZ//2, SZ//2,
+                           text=(name[0].upper() if name else "?"),
+                           fill="white",
+                           font=("Microsoft JhengHei UI", 15, "bold"))
+
+            txt = tk.Frame(card, bg=CBG)
+            txt.pack(side="left", fill="both", expand=True, pady=10)
+
+            # 第一行：名稱 + 時間
+            r1 = tk.Frame(txt, bg=CBG)
+            r1.pack(fill="x")
+            tk.Label(r1, text=name, bg=CBG,
+                     font=("Microsoft JhengHei UI", 10, "bold"),
+                     fg="#111111", anchor="w").pack(side="left")
+            tk.Label(r1, text=t, bg=CBG,
+                     font=("Microsoft JhengHei UI", 8),
+                     fg="#b2bec3").pack(side="right", padx=(0, 14))
+
+            # 第二行：訊息預覽 + 狀態/類型標籤
+            r2 = tk.Frame(txt, bg=CBG)
+            r2.pack(fill="x", pady=(3, 0))
+            tk.Label(r2, text=preview, bg=CBG,
+                     font=("Microsoft JhengHei UI", 9),
+                     fg="#636e72", anchor="w",
+                     justify="left").pack(side="left", fill="x", expand=True)
+
+            # 右側：待處理顯示橘點；其他顯示文字狀態標籤
+            if status == "待處理":
+                dot = tk.Canvas(r2, width=10, height=10,
+                                bg=CBG, highlightthickness=0)
+                dot.pack(side="right", padx=(0, 14))
+                dot.create_oval(1, 1, 9, 9, fill=stat_color, outline="")
+            else:
+                tk.Label(r2, text=status, bg=CBG,
+                         font=("Microsoft JhengHei UI", 8),
+                         fg=stat_color).pack(side="right", padx=(0, 14))
+
+            # 底線
+            tk.Frame(card, height=1, bg="#eeeeee").pack(fill="x", side="bottom")
+            return card
+
+        def _bind_card_events(card: tk.Frame, iid: int):
+            def on_click(e, i=iid): _on_card_click(i)
+            def on_enter(e, c=card, i=iid):
+                if i != _selected_id[0]: _set_bg_all(c, "#f0faf5")
+            def on_leave(e, c=card, i=iid):
+                if i != _selected_id[0]: _set_bg_all(c, "#ffffff")
+            def _bind_w(w):
+                w.bind("<Button-1>", on_click)
+                w.bind("<Enter>",    on_enter)
+                w.bind("<Leave>",    on_leave)
+                for child in w.winfo_children():
+                    _bind_w(child)
+            _bind_w(card)
+
+        def _on_card_click(iid: int):
+            for fid, frame in _card_frames.items():
+                _set_bg_all(frame, "#ffffff")
+            if iid in _card_frames:
+                _set_bg_all(_card_frames[iid], "#e8f8f0")
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM line_inquiries WHERE id=?", (iid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if row:
+                _show_detail(dict(row))
 
         # ── 右：詳情 + 操作 ───────────────────────────────────
         detail_outer, detail_lf = _mk_lf(body, "詳細內容", BG, FONTB)
@@ -153,10 +243,16 @@ class _LineTab:
         ctk.CTkLabel(detail_lf, text="訊息內容：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY, anchor="w"
                       ).pack(anchor="w", padx=8, pady=(4, 1))
-        msg_box = ctk.CTkTextbox(detail_lf, font=FONT_S, height=52,
-                                  corner_radius=4, border_width=1,
-                                  state="disabled", wrap="word")
-        msg_box.pack(fill="x", padx=8, pady=(0, 3))
+        _bubble_wrap = tk.Frame(detail_lf, bg="#e8ecef", padx=0, pady=0)
+        _bubble_wrap.pack(fill="x", padx=(20, 8), pady=(0, 3))
+        msg_box = tk.Text(_bubble_wrap, font=FONT_S, height=4,
+                          wrap="word", state="disabled", cursor="arrow",
+                          relief="flat", borderwidth=0,
+                          bg="#e8ecef", fg="#2d3436",
+                          padx=10, pady=7,
+                          highlightthickness=0,
+                          selectbackground="#c8e6c9")
+        msg_box.pack(fill="x", expand=True)
 
         btn_history = _ctk_btn(
             detail_lf, text="📋  查看同顧客歷史詢問",
@@ -392,28 +488,27 @@ class _LineTab:
             else:
                 status_bar.configure(text="", text_color=GRAY)
             rows = _fetch_inquiries(status_var.get())
-            tree.delete(*tree.get_children())
+            # 清除舊卡片
+            for w in list(cards_scroll.winfo_children()):
+                w.destroy()
+            _card_frames.clear()
+            # 建立新卡片
             for r in rows:
-                preview = r["message"][:40].replace("\n", " ")
-                if len(r["message"]) > 40:
-                    preview += "…"
-                tree.insert("", "end",
-                            values=(r["created_at"][:16],
-                                    r["display_name"],
-                                    r["inquiry_type"],
-                                    r["status"],
-                                    preview),
-                            tags=(r["id"],))
+                card = _build_card(r)
+                _card_frames[r["id"]] = card
+                _bind_card_events(card, r["id"])
             n = len(rows)
             count_lbl.configure(text=f"共 {n} 筆" if n else "無資料")
             _clear_detail()
 
         def _clear_detail():
+            for frame in _card_frames.values():
+                _set_bg_all(frame, "#ffffff")
             for lbl in _detail_labels.values():
                 lbl.configure(text="—")
-            msg_box.configure(state="normal")
+            msg_box.configure(state=tk.NORMAL)
             msg_box.delete("1.0", "end")
-            msg_box.configure(state="disabled")
+            msg_box.configure(state=tk.DISABLED)
             _selected_id[0] = 0
             _selected_user[0] = ""
             btn_create.configure(state="disabled")
@@ -433,10 +528,10 @@ class _LineTab:
 
             type_var.set(row_data.get("inquiry_type", "未分類"))
 
-            msg_box.configure(state="normal")
+            msg_box.configure(state=tk.NORMAL)
             msg_box.delete("1.0", "end")
             msg_box.insert("1.0", row_data["message"])
-            msg_box.configure(state="disabled")
+            msg_box.configure(state=tk.DISABLED)
 
             # 填入 Gemini 辨識結果
             for key, var in _field_vars.items():
@@ -445,24 +540,6 @@ class _LineTab:
             is_pending = (status == "待處理")
             btn_create.configure(state="normal" if is_pending else "disabled")
             btn_ignore.configure(state="normal" if is_pending else "disabled")
-
-        def _on_select(event=None):
-            sel = tree.selection()
-            if not sel:
-                return
-            inquiry_id = int(tree.item(sel[0])["tags"][0])
-            from core.db import get_connection
-            conn = get_connection()
-            try:
-                row = conn.execute(
-                    "SELECT * FROM line_inquiries WHERE id=?", (inquiry_id,)
-                ).fetchone()
-            finally:
-                conn.close()
-            if row:
-                _show_detail(dict(row))
-
-        tree.bind("<<TreeviewSelect>>", _on_select)
 
         # ══════════════════════════════════════════════════════
         #  建立 Trello 卡片
@@ -584,10 +661,9 @@ class _LineTab:
         #  清空目前顯示的紀錄
         # ══════════════════════════════════════════════════════
         def _on_clear():
-            items = tree.get_children()
-            if not items:
+            if not _card_frames:
                 return
-            ids = [int(tree.item(i)["tags"][0]) for i in items]
+            ids = list(_card_frames.keys())
             if not messagebox.askyesno(
                 "確認清空",
                 f"確定要刪除目前顯示的 {len(ids)} 筆詢問紀錄？\n此操作無法復原。",
