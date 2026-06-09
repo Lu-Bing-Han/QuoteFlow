@@ -1,16 +1,18 @@
 """
 mixin_line.py — LINE 顧客詢問頁籤
 
-顯示透過 LINE 官方帳號傳入的顧客詢問，讓客服確認後手動決定是否在 Trello 建立卡片。
+三欄設計：
+  左  — 顧客列表（每人一張卡片）
+  中  — 對話串（點選顧客後顯示所有訊息氣泡）
+  右  — 選取訊息的資料表單 + 建卡操作
 """
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 import customtkinter as ctk
 from ui.app_core import _mk_lf, _ctk_btn
 
 
-# ── 顏色常數 ────────────────────────────────────────────────
 _STATUS_COLOR = {
     "待處理": "#e67e22",
     "已建卡": "#1e8449",
@@ -34,8 +36,8 @@ class _LineTab:
         line_cfg = self._config.get("line_server", {})
 
         ctk.CTkLabel(srv_lf, text="伺服器網址：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY,
-                      anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=4)
+                      font=FONT_S, text_color=GRAY, anchor="w"
+                      ).grid(row=0, column=0, sticky="w", padx=8, pady=4)
         srv_url_var = tk.StringVar(value=line_cfg.get("url", ""))
         ctk.CTkEntry(srv_lf, textvariable=srv_url_var, font=FONT_S,
                       placeholder_text="https://your-app.railway.app",
@@ -43,8 +45,8 @@ class _LineTab:
                       ).grid(row=0, column=1, sticky="ew", padx=(0, 4), pady=4)
 
         ctk.CTkLabel(srv_lf, text="API Secret：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY,
-                      anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=4)
+                      font=FONT_S, text_color=GRAY, anchor="w"
+                      ).grid(row=1, column=0, sticky="w", padx=8, pady=4)
         srv_secret_var = tk.StringVar(value=line_cfg.get("secret", ""))
         ctk.CTkEntry(srv_lf, textvariable=srv_secret_var, font=FONT_S,
                       show="*", corner_radius=4, border_width=1
@@ -65,213 +67,109 @@ class _LineTab:
         #  篩選列
         # ══════════════════════════════════════════════════════
         filter_outer, filter_lf = _mk_lf(parent, "篩選", BG, FONTB)
-        filter_outer.pack(fill="x", padx=12, pady=(12, 4))
+        filter_outer.pack(fill="x", padx=12, pady=(4, 4))
 
-        row = ctk.CTkFrame(filter_lf, fg_color="transparent", corner_radius=0)
-        row.pack(fill="x", padx=8, pady=6)
+        frow = ctk.CTkFrame(filter_lf, fg_color="transparent", corner_radius=0)
+        frow.pack(fill="x", padx=8, pady=6)
 
-        ctk.CTkLabel(row, text="狀態：", fg_color="transparent",
+        ctk.CTkLabel(frow, text="狀態：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).pack(side="left")
-
         status_var = tk.StringVar(value="待處理")
-        status_menu = ctk.CTkOptionMenu(
-            row, variable=status_var,
+        ctk.CTkOptionMenu(
+            frow, variable=status_var,
             values=["全部", "待處理", "已建卡", "已忽略"],
             font=FONT_S, width=100, height=28, corner_radius=4,
             command=lambda _: _refresh(),
-        )
-        status_menu.pack(side="left", padx=(0, 12))
+        ).pack(side="left", padx=(0, 12))
 
-        _ctk_btn(row, text="🔄  重新整理", command=lambda: _refresh(),
+        _ctk_btn(frow, text="🔄  重新整理", command=lambda: _refresh(),
                  width=110, height=28).pack(side="left")
-
-        _ctk_btn(row, text="🗑  清空列表",
+        _ctk_btn(frow, text="🗑  清空列表",
                  fg_color="#7f8c8d", hover_color="#626d72",
                  width=100, height=28,
                  command=lambda: _on_clear()).pack(side="left", padx=(8, 0))
 
-        count_lbl = ctk.CTkLabel(row, text="", fg_color="transparent",
+        count_lbl = ctk.CTkLabel(frow, text="", fg_color="transparent",
                                   font=FONT_S, text_color=GRAY)
         count_lbl.pack(side="left", padx=(16, 0))
 
         # ══════════════════════════════════════════════════════
-        #  主體：左側列表 + 右側詳情
+        #  三欄主體
         # ══════════════════════════════════════════════════════
         body = tk.Frame(parent, bg=BG)
-        body.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        body.pack(fill="both", expand=True, padx=12, pady=(0, 4))
 
-        # ── 左：詢問列表（聊天式卡片）────────────────────────
-        list_outer, list_lf = _mk_lf(body, "詢問列表", BG, FONTB)
-        list_outer.pack(side="left", fill="both", expand=True, padx=(0, 6))
+        # ── 欄一：顧客列表（固定寬度）────────────────────────
+        col_list = tk.Frame(body, bg=BG, width=200)
+        col_list.pack(side="left", fill="y")
+        col_list.pack_propagate(False)
+
+        list_outer, list_lf = _mk_lf(col_list, "詢問列表", BG, FONTB)
+        list_outer.pack(fill="both", expand=True)
 
         cards_scroll = ctk.CTkScrollableFrame(list_lf, fg_color="#f7f7f7",
                                                corner_radius=0)
-        cards_scroll.pack(fill="both", expand=True, padx=0, pady=0)
+        cards_scroll.pack(fill="both", expand=True)
 
-        _card_frames: dict[int, tk.Frame] = {}
+        # ── 欄二：對話串（彈性寬度）──────────────────────────
+        col_thread = tk.Frame(body, bg=BG)
+        col_thread.pack(side="left", fill="both", expand=True, padx=6)
 
-        _AVATAR_COLORS = ["#2e86c1","#117a65","#8e44ad","#d35400",
-                          "#c0392b","#1a5276","#0e6655","#784212"]
+        thread_outer, thread_lf = _mk_lf(col_thread, "對話紀錄", BG, FONTB)
+        thread_outer.pack(fill="both", expand=True)
 
-        def _avatar_color(name: str) -> str:
-            return _AVATAR_COLORS[sum(ord(c) for c in (name or "?")) % len(_AVATAR_COLORS)]
+        # 頂部顧客標題列
+        thread_header = tk.Frame(thread_lf, bg="#f0f0f0")
+        thread_header.pack(fill="x", padx=0, pady=0)
+        thread_name_lbl = tk.Label(
+            thread_header, text="← 點選左側顧客", bg="#f0f0f0",
+            font=("Microsoft JhengHei UI", 10, "bold"), fg="#636e72",
+            anchor="w", padx=12, pady=6,
+        )
+        thread_name_lbl.pack(side="left", fill="x", expand=True)
+        tk.Frame(thread_lf, height=1, bg="#dddddd").pack(fill="x")
 
-        def _set_bg_all(widget, color: str):
-            try: widget.configure(bg=color)
-            except Exception: pass
-            for child in widget.winfo_children():
-                _set_bg_all(child, color)
+        # 對話氣泡捲動區
+        thread_scroll = ctk.CTkScrollableFrame(thread_lf, fg_color="#f5f5f5",
+                                                corner_radius=0)
+        thread_scroll.pack(fill="both", expand=True)
 
-        def _build_card(inquiry: dict) -> tk.Frame:
-            name    = inquiry.get("display_name") or "未知顧客"
-            status  = inquiry.get("status", "待處理")
-            t       = (inquiry.get("created_at") or "")[:16]
-            msg     = (inquiry.get("message") or "").replace("\n", " ")
-            preview = (msg[:34] + "…") if len(msg) > 34 else msg
-            itype   = inquiry.get("inquiry_type") or ""
-            stat_color = _STATUS_COLOR.get(status, GRAY)
-            av_color   = _avatar_color(name)
-            CBG = "#ffffff"
+        # ── 欄三：資料表單（固定寬度）────────────────────────
+        col_detail = tk.Frame(body, bg=BG, width=280)
+        col_detail.pack(side="left", fill="y")
+        col_detail.pack_propagate(False)
 
-            card = tk.Frame(cards_scroll, bg=CBG, cursor="hand2")
-            card.pack(fill="x", padx=0, pady=0)
+        detail_outer, detail_lf = _mk_lf(col_detail, "詳細內容", BG, FONTB)
+        detail_outer.pack(fill="both", expand=True)
 
-            # Avatar
-            SZ = 46
-            av = tk.Canvas(card, width=SZ, height=SZ,
-                           bg=CBG, highlightthickness=0)
-            av.pack(side="left", padx=(12, 8), pady=10)
-            av.create_oval(2, 2, SZ-2, SZ-2, fill=av_color, outline="")
-            av.create_text(SZ//2, SZ//2,
-                           text=(name[0].upper() if name else "?"),
-                           fill="white",
-                           font=("Microsoft JhengHei UI", 15, "bold"))
-
-            txt = tk.Frame(card, bg=CBG)
-            txt.pack(side="left", fill="both", expand=True, pady=10)
-
-            # 第一行：名稱 + 時間
-            r1 = tk.Frame(txt, bg=CBG)
-            r1.pack(fill="x")
-            tk.Label(r1, text=name, bg=CBG,
-                     font=("Microsoft JhengHei UI", 10, "bold"),
-                     fg="#111111", anchor="w").pack(side="left")
-            tk.Label(r1, text=t, bg=CBG,
-                     font=("Microsoft JhengHei UI", 8),
-                     fg="#b2bec3").pack(side="right", padx=(0, 14))
-
-            # 第二行：訊息預覽 + 狀態/類型標籤
-            r2 = tk.Frame(txt, bg=CBG)
-            r2.pack(fill="x", pady=(3, 0))
-            tk.Label(r2, text=preview, bg=CBG,
-                     font=("Microsoft JhengHei UI", 9),
-                     fg="#636e72", anchor="w",
-                     justify="left").pack(side="left", fill="x", expand=True)
-
-            # 右側：待處理顯示橘點；其他顯示文字狀態標籤
-            if status == "待處理":
-                dot = tk.Canvas(r2, width=10, height=10,
-                                bg=CBG, highlightthickness=0)
-                dot.pack(side="right", padx=(0, 14))
-                dot.create_oval(1, 1, 9, 9, fill=stat_color, outline="")
-            else:
-                tk.Label(r2, text=status, bg=CBG,
-                         font=("Microsoft JhengHei UI", 8),
-                         fg=stat_color).pack(side="right", padx=(0, 14))
-
-            # 底線
-            tk.Frame(card, height=1, bg="#eeeeee").pack(fill="x", side="bottom")
-            return card
-
-        def _bind_card_events(card: tk.Frame, iid: int):
-            def on_click(e, i=iid): _on_card_click(i)
-            def on_enter(e, c=card, i=iid):
-                if i != _selected_id[0]: _set_bg_all(c, "#f0faf5")
-            def on_leave(e, c=card, i=iid):
-                if i != _selected_id[0]: _set_bg_all(c, "#ffffff")
-            def _bind_w(w):
-                w.bind("<Button-1>", on_click)
-                w.bind("<Enter>",    on_enter)
-                w.bind("<Leave>",    on_leave)
-                for child in w.winfo_children():
-                    _bind_w(child)
-            _bind_w(card)
-
-        def _on_card_click(iid: int):
-            for fid, frame in _card_frames.items():
-                _set_bg_all(frame, "#ffffff")
-            if iid in _card_frames:
-                _set_bg_all(_card_frames[iid], "#e8f8f0")
-            from core.db import get_connection
-            conn = get_connection()
-            try:
-                row = conn.execute(
-                    "SELECT * FROM line_inquiries WHERE id=?", (iid,)
-                ).fetchone()
-            finally:
-                conn.close()
-            if row:
-                _show_detail(dict(row))
-
-        # ── 右：詳情 + 操作 ───────────────────────────────────
-        detail_outer, detail_lf = _mk_lf(body, "詳細內容", BG, FONTB)
-        detail_outer.pack(side="left", fill="y", ipadx=4)
-        detail_outer.configure(width=280)
-        detail_outer.pack_propagate(False)
-
+        # ── 右側：唯讀訊息資訊 ────────────────────────────────
         _detail_labels: dict[str, ctk.CTkLabel] = {}
-
-        # ── 上方：唯讀基本資訊 ───────────────────────────────
         info_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
         info_frame.pack(fill="x", padx=8, pady=(4, 0))
         info_frame.columnconfigure(1, weight=1)
 
-        def _info_row(key: str, label: str, row: int):
+        def _info_row(key: str, label: str, r: int):
             ctk.CTkLabel(info_frame, text=label + "：", fg_color="transparent",
                           font=FONT_S, text_color=GRAY, anchor="w"
-                          ).grid(row=row, column=0, sticky="w", pady=1)
+                          ).grid(row=r, column=0, sticky="w", pady=1)
             lbl = ctk.CTkLabel(info_frame, text="—", fg_color="transparent",
                                 font=FONT_S, anchor="w")
-            lbl.grid(row=row, column=1, sticky="w", padx=(4, 0), pady=1)
+            lbl.grid(row=r, column=1, sticky="w", padx=(4, 0), pady=1)
             _detail_labels[key] = lbl
 
         _info_row("display_name", "LINE 名稱", 0)
         _info_row("created_at",   "時間",       1)
         _info_row("status",       "狀態",       2)
 
-        # ── 訊息內容 ─────────────────────────────────────────
-        ctk.CTkLabel(detail_lf, text="訊息內容：", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY, anchor="w"
-                      ).pack(anchor="w", padx=8, pady=(4, 1))
-        _bubble_wrap = tk.Frame(detail_lf, bg="#e8ecef", padx=0, pady=0)
-        _bubble_wrap.pack(fill="x", padx=(20, 8), pady=(0, 3))
-        msg_box = tk.Text(_bubble_wrap, font=FONT_S, height=4,
-                          wrap="word", state="disabled", cursor="arrow",
-                          relief="flat", borderwidth=0,
-                          bg="#e8ecef", fg="#2d3436",
-                          padx=10, pady=7,
-                          highlightthickness=0,
-                          selectbackground="#c8e6c9")
-        msg_box.pack(fill="x", expand=True)
-
-        btn_history = _ctk_btn(
-            detail_lf, text="📋  查看同顧客歷史詢問",
-            fg_color=GRAY, hover_color="#4d5d6e",
-            width=180, height=26,
-            command=lambda: _on_show_history(),
-        )
-        btn_history.pack(anchor="w", padx=8, pady=(0, 3))
-
-        # ── 可捲動的編輯表單 ─────────────────────────────────
         ctk.CTkLabel(detail_lf, text="Gemini 辨識結果（可手動補填）：",
                       fg_color="transparent", font=FONT_S, text_color=GRAY,
-                      anchor="w").pack(anchor="w", padx=8, pady=(1, 1))
+                      anchor="w").pack(anchor="w", padx=8, pady=(6, 1))
 
-        # ── 操作按鈕（固定在底部）────────────────────────────
+        # 操作按鈕（固定底部）
         btn_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
         btn_frame.pack(side="bottom", fill="x", padx=8, pady=(2, 8))
 
-        # ── 類型 + 人員代號（固定在底部）────────────────────
+        # 類型 + 人員（固定底部）
         bottom_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
         bottom_frame.pack(side="bottom", fill="x", padx=8, pady=(4, 2))
         bottom_frame.columnconfigure(1, weight=1)
@@ -287,15 +185,15 @@ class _LineTab:
 
         ctk.CTkLabel(bottom_frame, text="人員：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).grid(row=0, column=2, sticky="w", pady=3)
-        operators  = self._config.get("operators", [""])
-        op_codes   = self._config.get("operator_codes", {})
+        operators = self._config.get("operators", [""])
+        op_codes  = self._config.get("operator_codes", {})
         op_var = tk.StringVar(value=operators[0] if operators else "")
         ctk.CTkOptionMenu(bottom_frame, variable=op_var,
                            values=operators if operators else [""],
                            font=FONT_S, width=80, height=26, corner_radius=4
                            ).grid(row=0, column=3, sticky="w", padx=(2, 0), pady=3)
 
-        # ── 可捲動的編輯表單（填滿剩餘空間）────────────────
+        # 表單欄位
         scroll_frame = ctk.CTkScrollableFrame(detail_lf, fg_color="transparent",
                                                corner_radius=0)
         scroll_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
@@ -303,14 +201,14 @@ class _LineTab:
 
         _field_vars: dict[str, tk.StringVar] = {}
 
-        def _form_row(key: str, label: str, row: int):
+        def _form_row(key: str, label: str, r: int):
             ctk.CTkLabel(scroll_frame, text=label + "：", fg_color="transparent",
                           font=FONT_S, text_color=GRAY, anchor="w"
-                          ).grid(row=row, column=0, sticky="w", padx=(4, 2), pady=2)
+                          ).grid(row=r, column=0, sticky="w", padx=(4, 2), pady=2)
             var = tk.StringVar()
             ctk.CTkEntry(scroll_frame, textvariable=var, font=FONT_S,
                           height=26, corner_radius=4, border_width=1
-                          ).grid(row=row, column=1, sticky="ew", padx=(0, 4), pady=2)
+                          ).grid(row=r, column=1, sticky="ew", padx=(0, 4), pady=2)
             _field_vars[key] = var
 
         _form_row("company_name",    "公司名稱", 0)
@@ -339,7 +237,7 @@ class _LineTab:
         btn_ignore.pack(side="left", fill="x", expand=True)
 
         # ══════════════════════════════════════════════════════
-        #  狀態列（底部）
+        #  狀態列
         # ══════════════════════════════════════════════════════
         status_bar = ctk.CTkLabel(parent, text="", fg_color="transparent",
                                    font=FONT_S, text_color=GRAY, anchor="w")
@@ -348,15 +246,199 @@ class _LineTab:
         # ══════════════════════════════════════════════════════
         #  內部狀態
         # ══════════════════════════════════════════════════════
-        _selected_id: list[int] = [0]   # 用 list 讓 closure 可寫入
+        _card_frames: dict[str, tk.Frame] = {}   # user_id → card widget
         _selected_user: list[str] = [""]
+        _selected_id:   list[int] = [0]
+        _selected_bubble: list    = [None]
+        _thread_bubbles:  list    = []
 
-        def _get_trello_creds() -> tuple[str, str]:
-            tr_cfg = self._config.get("trello", {})
-            return tr_cfg.get("api_key", ""), tr_cfg.get("token", "")
+        _AVATAR_COLORS = ["#2e86c1","#117a65","#8e44ad","#d35400",
+                          "#c0392b","#1a5276","#0e6655","#784212"]
+
+        def _avatar_color(name: str) -> str:
+            return _AVATAR_COLORS[sum(ord(c) for c in (name or "?")) % len(_AVATAR_COLORS)]
+
+        def _set_bg_all(widget, color: str):
+            try: widget.configure(bg=color)
+            except Exception: pass
+            for child in widget.winfo_children():
+                _set_bg_all(child, color)
+
+        # ── 左欄：顧客卡片 ────────────────────────────────────
+        def _build_card(user_id: str, msgs: list[dict]) -> tk.Frame:
+            latest  = msgs[0]
+            name    = latest.get("display_name") or "未知顧客"
+            t       = (latest.get("created_at") or "")[:16]
+            msg     = (latest.get("message") or "").replace("\n", " ")
+            preview = (msg[:28] + "…") if len(msg) > 28 else msg
+            pending = sum(1 for m in msgs if m.get("status") == "待處理")
+            av_color = _avatar_color(name)
+            CBG = "#ffffff"
+
+            card = tk.Frame(cards_scroll, bg=CBG, cursor="hand2")
+            card.pack(fill="x")
+
+            SZ = 40
+            av = tk.Canvas(card, width=SZ, height=SZ, bg=CBG, highlightthickness=0)
+            av.pack(side="left", padx=(10, 6), pady=8)
+            av.create_oval(2, 2, SZ-2, SZ-2, fill=av_color, outline="")
+            av.create_text(SZ//2, SZ//2,
+                           text=(name[0].upper() if name else "?"),
+                           fill="white",
+                           font=("Microsoft JhengHei UI", 13, "bold"))
+
+            txt = tk.Frame(card, bg=CBG)
+            txt.pack(side="left", fill="both", expand=True, pady=8)
+
+            r1 = tk.Frame(txt, bg=CBG)
+            r1.pack(fill="x")
+            tk.Label(r1, text=name, bg=CBG,
+                     font=("Microsoft JhengHei UI", 9, "bold"),
+                     fg="#111111", anchor="w").pack(side="left")
+            tk.Label(r1, text=t[5:] if len(t) > 5 else t, bg=CBG,
+                     font=("Microsoft JhengHei UI", 7),
+                     fg="#b2bec3").pack(side="right", padx=(0, 8))
+
+            r2 = tk.Frame(txt, bg=CBG)
+            r2.pack(fill="x", pady=(2, 0))
+            tk.Label(r2, text=preview, bg=CBG,
+                     font=("Microsoft JhengHei UI", 8),
+                     fg="#636e72", anchor="w").pack(side="left", fill="x", expand=True)
+            if pending > 0:
+                tk.Label(r2, text=str(pending), bg="#e67e22", fg="white",
+                         font=("Microsoft JhengHei UI", 7, "bold"),
+                         padx=4, pady=1).pack(side="right", padx=(0, 8))
+
+            tk.Frame(card, height=1, bg="#eeeeee").pack(fill="x", side="bottom")
+            return card
+
+        def _bind_card_events(card: tk.Frame, user_id: str):
+            def on_click(e, uid=user_id): _on_card_click(uid)
+            def on_enter(e, c=card, uid=user_id):
+                if uid != _selected_user[0]: _set_bg_all(c, "#f0faf5")
+            def on_leave(e, c=card, uid=user_id):
+                if uid != _selected_user[0]: _set_bg_all(c, "#ffffff")
+            def _bind_w(w):
+                w.bind("<Button-1>", on_click)
+                w.bind("<Enter>",    on_enter)
+                w.bind("<Leave>",    on_leave)
+                for child in w.winfo_children(): _bind_w(child)
+            _bind_w(card)
+
+        def _on_card_click(user_id: str):
+            for uid, frame in _card_frames.items():
+                _set_bg_all(frame, "#ffffff")
+            if user_id in _card_frames:
+                _set_bg_all(_card_frames[user_id], "#e8f8f0")
+            _selected_user[0] = user_id
+
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                sf = status_var.get()
+                if sf == "全部":
+                    rows = conn.execute(
+                        "SELECT * FROM line_inquiries WHERE line_user_id=? "
+                        "ORDER BY created_at ASC", (user_id,)
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM line_inquiries WHERE line_user_id=? AND status=? "
+                        "ORDER BY created_at ASC", (user_id, sf)
+                    ).fetchall()
+            finally:
+                conn.close()
+
+            msgs = [dict(r) for r in rows]
+            name = msgs[0]["display_name"] if msgs else "未知顧客"
+            thread_name_lbl.configure(text=name, fg="#111111")
+            _show_thread(msgs)
+
+        # ── 中欄：對話串氣泡 ──────────────────────────────────
+        def _build_bubble(msg_data: dict):
+            mid    = msg_data["id"]
+            status = msg_data.get("status", "待處理")
+            t      = (msg_data.get("created_at") or "")[:16]
+            text   = msg_data.get("message", "")
+            stat_color = _STATUS_COLOR.get(status, GRAY)
+            BBGN = "#f5f5f5"
+
+            outer = tk.Frame(thread_scroll, bg=BBGN, cursor="hand2")
+            outer.pack(fill="x", padx=8, pady=4)
+
+            # 時間 + 狀態
+            hdr = tk.Frame(outer, bg=BBGN)
+            hdr.pack(fill="x", padx=2)
+            tk.Label(hdr, text=t, bg=BBGN,
+                     font=("Microsoft JhengHei UI", 7), fg="#b2bec3").pack(side="left")
+            tk.Label(hdr, text=status, bg=BBGN,
+                     font=("Microsoft JhengHei UI", 7), fg=stat_color).pack(side="right")
+
+            # 訊息氣泡（左對齊，模擬顧客訊息）
+            bub_wrap = tk.Frame(outer, bg=BBGN)
+            bub_wrap.pack(fill="x", pady=(2, 2))
+            bub = tk.Frame(bub_wrap, bg="#ffffff", padx=10, pady=7,
+                           relief="flat", bd=0)
+            bub.pack(side="left", padx=(4, 40))
+
+            # 使用 tk.Text 支援長訊息自動換行
+            txt_widget = tk.Text(bub, font=FONT_S, fg="#2d3436", bg="#ffffff",
+                                 wrap="word", relief="flat", borderwidth=0,
+                                 highlightthickness=0, cursor="arrow",
+                                 state="normal", width=32)
+            txt_widget.insert("1.0", text)
+            txt_widget.configure(state="disabled")
+            txt_widget.pack(fill="x")
+            # 動態調整高度
+            lines = int(txt_widget.index("end-1c").split(".")[0])
+            txt_widget.configure(height=max(1, lines))
+
+            # 底線分隔
+            tk.Frame(outer, height=1, bg="#ebebeb").pack(fill="x", pady=(2, 0))
+
+            _thread_bubbles.append(outer)
+
+            def on_click(e, m=mid, b=outer): _on_bubble_click(m, b)
+            def on_enter(e, b=outer):
+                if _selected_bubble[0] is not b: _set_bg_all(b, "#eaf4fb")
+            def on_leave(e, b=outer):
+                if _selected_bubble[0] is not b: _set_bg_all(b, BBGN)
+
+            def _bind_w(w):
+                w.bind("<Button-1>", on_click)
+                w.bind("<Enter>",    on_enter)
+                w.bind("<Leave>",    on_leave)
+                for child in w.winfo_children(): _bind_w(child)
+            _bind_w(outer)
+
+        def _show_thread(msgs: list[dict]):
+            for w in list(thread_scroll.winfo_children()): w.destroy()
+            _thread_bubbles.clear()
+            _selected_bubble[0] = None
+            _clear_form()
+            for m in msgs:
+                _build_bubble(m)
+            thread_scroll.after(80, lambda: thread_scroll._parent_canvas.yview_moveto(1.0))
+
+        def _on_bubble_click(msg_id: int, bubble_frame: tk.Frame):
+            if _selected_bubble[0] is not None:
+                _set_bg_all(_selected_bubble[0], "#f5f5f5")
+            _selected_bubble[0] = bubble_frame
+            _set_bg_all(bubble_frame, "#d5eaf8")
+
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM line_inquiries WHERE id=?", (msg_id,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if row:
+                _show_detail(dict(row))
 
         # ══════════════════════════════════════════════════════
-        #  資料庫操作
+        #  伺服器 / DB 工具
         # ══════════════════════════════════════════════════════
         def _srv_headers() -> dict:
             secret = self._config.get("line_server", {}).get("secret", "")
@@ -366,7 +448,6 @@ class _LineTab:
             return self._config.get("line_server", {}).get("url", "")
 
         def _sync_from_server(status_filter: str):
-            """從雲端拉取最新詢問並 upsert 進本機 DB。"""
             import requests as _req
             url = _srv_url()
             if not url:
@@ -409,7 +490,6 @@ class _LineTab:
         def _push_status_to_server(inquiry_id: int, status: str,
                                    inquiry_type: str = "", trello_card_id: str = "",
                                    extra: dict | None = None):
-            """把狀態變更推回雲端（失敗不中斷，靜默忽略）。"""
             import requests as _req
             url = _srv_url()
             if not url:
@@ -421,8 +501,7 @@ class _LineTab:
                 payload.update({k: v or None for k, v in extra.items()})
             try:
                 _req.patch(f"{url}/api/inquiries/{inquiry_id}",
-                           json=payload,
-                           headers=_srv_headers(), timeout=8)
+                           json=payload, headers=_srv_headers(), timeout=8)
             except Exception:
                 pass
 
@@ -443,16 +522,13 @@ class _LineTab:
             finally:
                 conn.close()
 
-        def _update_status(inquiry_id: int, new_status: str,
-                           trello_card_id: str = ""):
+        def _update_status(inquiry_id: int, new_status: str, trello_card_id: str = ""):
             from core.db import get_connection
             conn = get_connection()
             try:
                 conn.execute(
-                    """UPDATE line_inquiries
-                       SET status=?, trello_card_id=?,
-                           updated_at=datetime('now','localtime')
-                       WHERE id=?""",
+                    "UPDATE line_inquiries SET status=?, trello_card_id=?, "
+                    "updated_at=datetime('now','localtime') WHERE id=?",
                     (new_status, trello_card_id, inquiry_id),
                 )
                 conn.commit()
@@ -464,10 +540,8 @@ class _LineTab:
             conn = get_connection()
             try:
                 conn.execute(
-                    """UPDATE line_inquiries
-                       SET inquiry_type=?,
-                           updated_at=datetime('now','localtime')
-                       WHERE id=?""",
+                    "UPDATE line_inquiries SET inquiry_type=?, "
+                    "updated_at=datetime('now','localtime') WHERE id=?",
                     (new_type, inquiry_id),
                 )
                 conn.commit()
@@ -487,56 +561,60 @@ class _LineTab:
                                      text_color="#e67e22")
             else:
                 status_bar.configure(text="", text_color=GRAY)
+
             rows = _fetch_inquiries(status_var.get())
-            # 清除舊卡片
-            for w in list(cards_scroll.winfo_children()):
-                w.destroy()
-            _card_frames.clear()
-            # 建立新卡片
+
+            from collections import OrderedDict
+            grouped: OrderedDict[str, list[dict]] = OrderedDict()
             for r in rows:
-                card = _build_card(r)
-                _card_frames[r["id"]] = card
-                _bind_card_events(card, r["id"])
-            n = len(rows)
-            count_lbl.configure(text=f"共 {n} 筆" if n else "無資料")
+                uid = r.get("line_user_id") or "__unknown__"
+                grouped.setdefault(uid, []).append(r)
+
+            for w in list(cards_scroll.winfo_children()): w.destroy()
+            _card_frames.clear()
+
+            for uid, msgs in grouped.items():
+                card = _build_card(uid, msgs)
+                _card_frames[uid] = card
+                _bind_card_events(card, uid)
+
+            n_users = len(grouped)
+            n_msgs  = len(rows)
+            count_lbl.configure(
+                text=f"{n_users} 位顧客，{n_msgs} 則" if n_users else "無資料"
+            )
             _clear_detail()
+
+        def _clear_form():
+            for lbl in _detail_labels.values():
+                lbl.configure(text="—")
+            for var in _field_vars.values():
+                var.set("")
+            _selected_id[0] = 0
+            btn_create.configure(state="disabled")
+            btn_ignore.configure(state="disabled")
 
         def _clear_detail():
             for frame in _card_frames.values():
                 _set_bg_all(frame, "#ffffff")
-            for lbl in _detail_labels.values():
-                lbl.configure(text="—")
-            msg_box.configure(state=tk.NORMAL)
-            msg_box.delete("1.0", "end")
-            msg_box.configure(state=tk.DISABLED)
-            _selected_id[0] = 0
             _selected_user[0] = ""
-            btn_create.configure(state="disabled")
-            btn_ignore.configure(state="disabled")
-            btn_history.configure(state="disabled")
+            for w in list(thread_scroll.winfo_children()): w.destroy()
+            _thread_bubbles.clear()
+            _selected_bubble[0] = None
+            thread_name_lbl.configure(text="← 點選左側顧客", fg="#636e72")
+            _clear_form()
 
         def _show_detail(row_data: dict):
             _selected_id[0] = row_data["id"]
-            _selected_user[0] = row_data.get("line_user_id", "")
-            btn_history.configure(state="normal")
             _detail_labels["display_name"].configure(text=row_data["display_name"])
             _detail_labels["created_at"].configure(text=row_data["created_at"][:16])
-
             status = row_data["status"]
-            color  = _STATUS_COLOR.get(status, GRAY)
-            _detail_labels["status"].configure(text=status, text_color=color)
-
+            _detail_labels["status"].configure(
+                text=status, text_color=_STATUS_COLOR.get(status, GRAY)
+            )
             type_var.set(row_data.get("inquiry_type", "未分類"))
-
-            msg_box.configure(state=tk.NORMAL)
-            msg_box.delete("1.0", "end")
-            msg_box.insert("1.0", row_data["message"])
-            msg_box.configure(state=tk.DISABLED)
-
-            # 填入 Gemini 辨識結果
             for key, var in _field_vars.items():
                 var.set(row_data.get(key, "") or "")
-
             is_pending = (status == "待處理")
             btn_create.configure(state="normal" if is_pending else "disabled")
             btn_ignore.configure(state="normal" if is_pending else "disabled")
@@ -548,11 +626,11 @@ class _LineTab:
             inquiry_id = _selected_id[0]
             if not inquiry_id:
                 return
-
-            # 先儲存客服可能調整的類型
             _update_type(inquiry_id, type_var.get())
 
-            api_key, token = _get_trello_creds()
+            tr_cfg = self._config.get("trello", {})
+            api_key = tr_cfg.get("api_key", "")
+            token   = tr_cfg.get("token", "")
             if not api_key or not token:
                 messagebox.showwarning(
                     "尚未設定 Trello 憑證",
@@ -561,7 +639,6 @@ class _LineTab:
                 )
                 return
 
-            # 讀取最新資料
             from core.db import get_connection
             conn = get_connection()
             try:
@@ -571,24 +648,19 @@ class _LineTab:
             finally:
                 conn.close()
 
-            # 取人員代號
             op_name = op_var.get()
             op_code = op_codes.get(op_name, op_name[:1].upper() if op_name else "")
-
-            # 從表單讀取最新填入值（客服可能手動補填）
             company  = _field_vars["company_name"].get().strip()
             area     = _field_vars["area"].get().strip()
             contact  = _field_vars["contact_name"].get().strip()
             product  = _field_vars["inquiry_product"].get().strip()
 
-            # 標題：【代號 公司名(市區區域)-客戶名 -詢價商品】
-            area_part    = f"({area})" if area else ""
-            contact_part = f"-{contact}" if contact else ""
-            product_part = f" -{product}" if product else ""
             card_title = (
-                f"【{op_code} {company}{area_part}{contact_part}{product_part}】"
+                f"【{op_code} {company}"
+                f"{'(' + area + ')' if area else ''}"
+                f"{'-' + contact if contact else ''}"
+                f"{' -' + product if product else ''}】"
             )
-
             card_desc = (
                 f"公司名稱: {_field_vars['company_name'].get()}\n"
                 f"統一編號: {_field_vars['tax_id'].get()}\n"
@@ -604,7 +676,6 @@ class _LineTab:
 
             status_bar.configure(text="⏳  正在建立 Trello 卡片…", text_color="#e67e22")
             btn_create.configure(state="disabled")
-
             _inq_type = type_var.get()
 
             def _do_create():
@@ -622,17 +693,19 @@ class _LineTab:
                                      board_name=_BOARD_NAME, list_name=_LIST_NAME)
                     _update_status(inquiry_id, "已建卡")
                     _push_status_to_server(
-                        inquiry_id, "已建卡",
-                        inquiry_type=type_var.get(),
+                        inquiry_id, "已建卡", inquiry_type=type_var.get(),
                         extra={k: v.get() for k, v in _field_vars.items()},
                     )
-                    self.after(0, lambda: _on_create_success())
+                    self.after(0, _on_create_success)
                 except Exception as e:
                     self.after(0, lambda err=e: _on_create_error(err))
 
             def _on_create_success():
                 status_bar.configure(text="✔  Trello 卡片建立成功！", text_color="#1e8449")
+                cur_user = _selected_user[0]
                 _refresh()
+                if cur_user and cur_user in _card_frames:
+                    _on_card_click(cur_user)
 
             def _on_create_error(err):
                 status_bar.configure(text=f"✕  建立失敗：{err}", text_color="#c0392b")
@@ -642,132 +715,59 @@ class _LineTab:
             threading.Thread(target=_do_create, daemon=True).start()
 
         # ══════════════════════════════════════════════════════
-        #  忽略詢問
+        #  忽略
         # ══════════════════════════════════════════════════════
         def _on_ignore():
             inquiry_id = _selected_id[0]
             if not inquiry_id:
                 return
-            if not messagebox.askyesno("確認忽略",
-                                        "確定要忽略這筆詢問？",
-                                        parent=self):
+            if not messagebox.askyesno("確認忽略", "確定要忽略這筆詢問？", parent=self):
                 return
             _update_status(inquiry_id, "已忽略")
             _push_status_to_server(inquiry_id, "已忽略")
             status_bar.configure(text="已忽略此筆詢問", text_color=GRAY)
+            cur_user = _selected_user[0]
             _refresh()
+            if cur_user and cur_user in _card_frames:
+                _on_card_click(cur_user)
 
         # ══════════════════════════════════════════════════════
-        #  清空目前顯示的紀錄
+        #  清空
         # ══════════════════════════════════════════════════════
         def _on_clear():
             if not _card_frames:
                 return
-            ids = list(_card_frames.keys())
+            from core.db import get_connection
+            sf = status_var.get()
+            conn = get_connection()
+            try:
+                if sf == "全部":
+                    ids = [r[0] for r in conn.execute(
+                        "SELECT id FROM line_inquiries").fetchall()]
+                else:
+                    ids = [r[0] for r in conn.execute(
+                        "SELECT id FROM line_inquiries WHERE status=?", (sf,)).fetchall()]
+            finally:
+                conn.close()
+            if not ids:
+                return
             if not messagebox.askyesno(
                 "確認清空",
                 f"確定要刪除目前顯示的 {len(ids)} 筆詢問紀錄？\n此操作無法復原。",
                 parent=self,
             ):
                 return
-            from core.db import get_connection
             conn = get_connection()
             try:
                 placeholders = ",".join("?" * len(ids))
                 conn.execute(
-                    f"DELETE FROM line_inquiries WHERE id IN ({placeholders})", ids
-                )
+                    f"DELETE FROM line_inquiries WHERE id IN ({placeholders})", ids)
                 conn.commit()
             finally:
                 conn.close()
             status_bar.configure(text=f"已刪除 {len(ids)} 筆紀錄", text_color=GRAY)
             _refresh()
 
-        # ══════════════════════════════════════════════════════
-        #  同顧客歷史詢問（資訊分散在多則訊息時，方便人工拼湊）
-        # ══════════════════════════════════════════════════════
-        _STRUCT_LABELS = [
-            ("company_name",    "公司"),
-            ("tax_id",          "統編"),
-            ("contact_name",    "聯絡人"),
-            ("mobile",          "手機"),
-            ("phone",           "電話"),
-            ("fax",             "FAX"),
-            ("address",         "地址"),
-            ("email",           "Mail"),
-            ("inquiry_product", "詢價商品"),
-            ("area",            "區域"),
-        ]
-
-        def _show_customer_history(user_id: str, name: str, current_id: int):
-            from core.db import get_connection
-            conn = get_connection()
-            try:
-                rows = [dict(r) for r in conn.execute(
-                    "SELECT * FROM line_inquiries WHERE line_user_id=? "
-                    "ORDER BY created_at ASC",
-                    (user_id,)
-                ).fetchall()]
-            finally:
-                conn.close()
-
-            dlg = ctk.CTkToplevel(self)
-            dlg.title(f"同顧客歷史詢問 — {name}")
-            dlg.configure(fg_color=BG)
-            dlg.after(100, dlg.grab_set)
-            dlg.geometry("640x540")
-
-            ctk.CTkLabel(
-                dlg,
-                text=f"共 {len(rows)} 筆歷史詢問（依時間排序，可參考各則內容人工拼湊完整資料）",
-                fg_color="transparent", font=FONT_S, text_color=GRAY,
-            ).pack(anchor="w", padx=16, pady=(12, 4))
-
-            scroll = ctk.CTkScrollableFrame(dlg, fg_color="transparent", corner_radius=0)
-            scroll.pack(fill="both", expand=True, padx=12, pady=(0, 8))
-
-            for r in rows:
-                title = f"{r['created_at'][:16]}　[{r['status']}]"
-                if r["id"] == current_id:
-                    title += "　← 目前檢視這筆"
-                card_outer, card_lf = _mk_lf(scroll, title, BG, FONTB)
-                card_outer.pack(fill="x", padx=4, pady=4)
-
-                msg_preview = r["message"][:200]
-                ctk.CTkLabel(card_lf, text=msg_preview, fg_color="transparent",
-                              font=FONT_S, anchor="w", justify="left",
-                              wraplength=560
-                              ).pack(anchor="w", padx=8, pady=(4, 2))
-
-                bits = [f"{lbl}: {r.get(key)}" for key, lbl in _STRUCT_LABELS if r.get(key)]
-                if bits:
-                    ctk.CTkLabel(card_lf, text="　|　".join(bits),
-                                  fg_color="transparent", font=FONT_S,
-                                  text_color="#1e8449", anchor="w", justify="left",
-                                  wraplength=560
-                                  ).pack(anchor="w", padx=8, pady=(0, 6))
-                else:
-                    ctk.CTkLabel(card_lf, text="（未辨識出結構化資訊）",
-                                  fg_color="transparent", font=FONT_S,
-                                  text_color=GRAY, anchor="w"
-                                  ).pack(anchor="w", padx=8, pady=(0, 6))
-
-            ctk.CTkButton(dlg, text="關閉", command=dlg.destroy,
-                           fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
-                           font=FONT, width=100, height=34, corner_radius=6
-                           ).pack(pady=(0, 10))
-
-        def _on_show_history():
-            user_id = _selected_user[0]
-            if not user_id:
-                return
-            name = _detail_labels["display_name"].cget("text")
-            _show_customer_history(user_id, name, _selected_id[0])
-
-        # 初始狀態：按鈕停用，等待選取
         btn_create.configure(state="disabled")
         btn_ignore.configure(state="disabled")
-        btn_history.configure(state="disabled")
-
-        # 首次載入
         _refresh()
