@@ -338,14 +338,18 @@ class _TrelloTab:
                       fg_color="transparent", font=FONT_S, text_color=GRAY
                       ).pack(side="left", padx=(0, 12))
 
-        ctk.CTkLabel(fetch_row, text="近", fg_color="transparent",
+        ctk.CTkLabel(fetch_row, text="下單日期 從：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).pack(side="left", padx=(8, 2))
-        days_var = tk.StringVar(value="14")
-        ctk.CTkEntry(fetch_row, textvariable=days_var, font=FONT_S,
-                      width=40, height=28, corner_radius=4,
-                      justify="center").pack(side="left")
-        ctk.CTkLabel(fetch_row, text="天", fg_color="transparent",
-                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(2, 8))
+        from tkcalendar import DateEntry
+        from datetime import date as _dt_cls
+        date_entry = DateEntry(fetch_row, width=10, date_pattern='y/m/d',
+                                font=FONT_S, maxdate=_dt_cls.today())
+        date_entry.pack(side="left", padx=(0, 2))
+        ctk.CTkButton(fetch_row, text="全部",
+                       command=lambda: _show_all(),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=50, height=28, corner_radius=4
+                       ).pack(side="left", padx=(2, 8))
 
         fetch_status = ctk.CTkLabel(fetch_row, text="", fg_color="transparent",
                                      font=FONT_S, text_color=GRAY)
@@ -360,26 +364,31 @@ class _TrelloTab:
             return (99, 99)
 
         def _apply_days_filter(base: list | None = None):
-            from datetime import date, timedelta
             import re
+            from datetime import date
             source = base if base is not None else _all_cards
-            try:
-                n = int(days_var.get())
-            except ValueError:
-                n = 14
-            cutoff = date.today() - timedelta(days=n)
+            from_date = date_entry.get_date()
             def _parse_d(s):
                 m = re.match(r'(\d{1,2})/(\d{1,2})', str(s).strip())
                 if m:
                     try: return date(date.today().year, int(m.group(1)), int(m.group(2)))
                     except ValueError: pass
                 return None
-            filtered = [r for r in source if (_parse_d(r.get("order_date","")) or date.min) >= cutoff]
+            filtered = [r for r in source if (_parse_d(r.get("order_date","")) or date.min) >= from_date]
             if base is not None:
                 _all_cards.clear(); _all_cards.extend(source)
             _render_tree(filtered)
             fetch_status.configure(
-                text=f"✔  共 {len(_all_cards)} 筆，顯示近 {n} 天 {len(filtered)} 筆",
+                text=f"✔  共 {len(_all_cards)} 筆，篩選後 {len(filtered)} 筆",
+                text_color=GREEN)
+
+        def _show_all(base: list | None = None):
+            source = base if base is not None else _all_cards
+            if base is not None:
+                _all_cards.clear(); _all_cards.extend(source)
+            _render_tree(_all_cards)
+            fetch_status.configure(
+                text=f"✔  共 {len(_all_cards)} 筆（全部顯示）",
                 text_color=GREEN)
 
         def _render_tree(records: list):
