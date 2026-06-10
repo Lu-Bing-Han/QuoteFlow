@@ -83,8 +83,8 @@ def _init_db():
             email           TEXT    DEFAULT '',
             inquiry_product TEXT    DEFAULT '',
             area            TEXT    DEFAULT '',
-            created_at      TEXT    DEFAULT (datetime('now','localtime')),
-            updated_at      TEXT    DEFAULT (datetime('now','localtime'))
+            created_at      TEXT    DEFAULT (datetime('now','+8 hours')),
+            updated_at      TEXT    DEFAULT (datetime('now','+8 hours'))
         );
     """)
     new_cols = [
@@ -322,12 +322,24 @@ def update_inquiry(inquiry_id: int):
     values = [data.get(f) for f in fields] + [inquiry_id]
     c = _conn()
     c.execute(
-        f"UPDATE line_inquiries SET {sets}, updated_at=datetime('now','localtime') WHERE id=?",
+        f"UPDATE line_inquiries SET {sets}, updated_at=datetime('now','+8 hours') WHERE id=?",
         values,
     )
     c.commit()
     c.close()
     return jsonify({"ok": True})
+
+
+@app.route("/api/extract_text", methods=["POST"])
+def extract_text():
+    """接收合併訊息文字，呼叫 Gemini 辨識並回傳結構化欄位。"""
+    _auth()
+    data = request.json or {}
+    message = data.get("message", "").strip()
+    if not message:
+        return jsonify(_EMPTY_INFO)
+    info = _extract_info(message)
+    return jsonify(info)
 
 
 @app.route("/health")
