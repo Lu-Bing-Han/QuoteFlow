@@ -364,7 +364,7 @@ def push_message():
         return jsonify({"ok": False, "error": str(e)}), 500
 
     c = _conn()
-    c.execute("""
+    cur = c.execute("""
         INSERT INTO line_inquiries
             (line_user_id, display_name, message, sender, status,
              inquiry_type, created_at, updated_at)
@@ -372,7 +372,7 @@ def push_message():
                 datetime('now','+8 hours'), datetime('now','+8 hours'))
     """, (to, message))
     c.commit()
-    row_id = c.lastrowid
+    row_id = cur.lastrowid
     row = dict(c.execute(
         "SELECT * FROM line_inquiries WHERE id=?", (row_id,)
     ).fetchone())

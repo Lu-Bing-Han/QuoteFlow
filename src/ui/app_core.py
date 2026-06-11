@@ -211,8 +211,10 @@ class App(
         content_area.pack(side="left", fill="both", expand=True)
 
         # ── 頁面 Frame（每個功能一個，重疊在 content_area）──────
-        self._pages:    dict[str, ctk.CTkFrame]  = {}
-        self._nav_btns: dict[str, ctk.CTkButton] = {}
+        self._pages:         dict[str, tk.Frame]    = {}
+        self._page_builders: dict[str, object]      = {}
+        self._page_built:    set[str]               = set()
+        self._nav_btns:      dict[str, ctk.CTkButton] = {}
         self._active_page: str = ""
 
         def _show(key: str):
@@ -220,6 +222,9 @@ class App(
                 self._nav_btns[self._active_page].configure(fg_color="transparent")
             for f in self._pages.values():
                 f.pack_forget()
+            if key not in self._page_built:
+                self._page_builders[key]()
+                self._page_built.add(key)
             self._pages[key].pack(fill="both", expand=True)
             self._nav_btns[key].configure(fg_color=NAV_ACTIVE)
             self._active_page = key
@@ -230,6 +235,10 @@ class App(
             f = tk.Frame(content_area, bg=BG)
             self._pages[key] = f
             return f
+
+        def _register(key: str, builder, *args):
+            page = _make_page(key)
+            self._page_builders[key] = lambda p=page: builder(p, *args)
 
         # ── 導覽列項目生成 ────────────────────────────────────
         def _nav_group(text: str):
@@ -276,24 +285,24 @@ class App(
         _nav_item("報價記錄",     "history")
         _nav_item("LINE 詢問",    "line")
 
-        # ── 建立各頁面內容 ────────────────────────────────────
-        self._build_tab_shipping(   _make_page("shipping"),   PAD, FONT, FONTB, BG)
-        self._build_tab_quote(      _make_page("quote"),      FONT, FONTB, BG)
-        self._build_tab_inspection( _make_page("inspection"), PAD, FONT, FONTB, BG)
-        self._build_tab_fix(        _make_page("fix"),        PAD, FONT, FONTB, BG)
-        self._build_tab_tag(        _make_page("tag"),        PAD, FONT, FONTB, BG)
-        self._build_tab_label(      _make_page("label"),      FONT, FONTB, BG)
-        self._build_tab_schedule(   _make_page("schedule"),   FONT, FONTB, BG)
-        self._build_tab_overview(        _make_page("overview"),       FONT, FONTB, BG)
-        self._build_tab_production(      _make_page("production"),     FONT, FONTB, BG)
-        self._build_tab_shipping_order(  _make_page("shipping_order"), FONT, FONTB, BG)
-        self._build_tab_create_cards(    _make_page("create"),         FONT, FONTB, BG)
-        self._build_tab_download_cards(_make_page("download"),   FONT, FONTB, BG)
-        self._build_tab_accounting(    _make_page("accounting"), FONT, FONTB, BG)
-        self._build_tab_history(    _make_page("history"),    FONT, FONTB, BG)
-        self._build_tab_line(       _make_page("line"),       FONT, FONTB, BG)
+        # ── 登記各頁面（lazy：第一次切換時才建立 widgets）────────
+        _register("shipping",      self._build_tab_shipping,      PAD, FONT, FONTB, BG)
+        _register("quote",         self._build_tab_quote,         FONT, FONTB, BG)
+        _register("inspection",    self._build_tab_inspection,    PAD, FONT, FONTB, BG)
+        _register("fix",           self._build_tab_fix,           PAD, FONT, FONTB, BG)
+        _register("tag",           self._build_tab_tag,           PAD, FONT, FONTB, BG)
+        _register("label",         self._build_tab_label,         FONT, FONTB, BG)
+        _register("schedule",      self._build_tab_schedule,      FONT, FONTB, BG)
+        _register("overview",      self._build_tab_overview,      FONT, FONTB, BG)
+        _register("production",    self._build_tab_production,    FONT, FONTB, BG)
+        _register("shipping_order",self._build_tab_shipping_order,FONT, FONTB, BG)
+        _register("create",        self._build_tab_create_cards,  FONT, FONTB, BG)
+        _register("download",      self._build_tab_download_cards,FONT, FONTB, BG)
+        _register("accounting",    self._build_tab_accounting,    FONT, FONTB, BG)
+        _register("history",       self._build_tab_history,       FONT, FONTB, BG)
+        _register("line",          self._build_tab_line,          FONT, FONTB, BG)
 
-        # 預設顯示出貨單
+        # 預設顯示出貨單（此時才真正建立 shipping 頁面）
         _show("shipping")
 
     # ════════════════════════════════════════════════════════
