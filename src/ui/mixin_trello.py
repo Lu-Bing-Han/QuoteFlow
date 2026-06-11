@@ -12,6 +12,52 @@ from pathlib import Path
 from ui.app_core import _mk_lf
 
 
+def _bind_drag_select(tree: "ttk.Treeview"):
+    """為 Treeview 加上滑鼠拖曳範圍選取與 Ctrl+點擊多選。"""
+    _anchor = [None]
+
+    def _on_press(event):
+        item = tree.identify_row(event.y)
+        if not item:
+            return
+        _anchor[0] = item
+        tree.selection_set(item)
+
+    def _on_ctrl_press(event):
+        item = tree.identify_row(event.y)
+        if not item:
+            return
+        _anchor[0] = None
+        if item in tree.selection():
+            tree.selection_remove(item)
+        else:
+            tree.selection_add(item)
+        return "break"
+
+    def _on_drag(event):
+        if not _anchor[0]:
+            return
+        item = tree.identify_row(event.y)
+        if not item:
+            return
+        all_items = tree.get_children()
+        try:
+            a = all_items.index(_anchor[0])
+            b = all_items.index(item)
+        except ValueError:
+            return
+        lo, hi = min(a, b), max(a, b)
+        tree.selection_set(all_items[lo:hi + 1])
+
+    def _on_release(event):
+        _anchor[0] = None
+
+    tree.bind("<Button-1>",         _on_press)
+    tree.bind("<Control-Button-1>", _on_ctrl_press)
+    tree.bind("<B1-Motion>",        _on_drag)
+    tree.bind("<ButtonRelease-1>",  _on_release)
+
+
 class _TrelloTab:
     """Mixin providing Trello-related tab builders and callbacks."""
 
@@ -215,50 +261,9 @@ class _TrelloTab:
         vsb.pack(side="right", fill="y")
 
         # ── 拖曳框選 ──────────────────────────────────────
-        _drag_anchor = [None]
+        _bind_drag_select(tree)
 
-        def _on_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = item
-            tree.selection_set(item)
-
-        def _on_ctrl_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = None
-            if item in tree.selection():
-                tree.selection_remove(item)
-            else:
-                tree.selection_add(item)
-            return "break"
-
-        def _on_drag(event):
-            if not _drag_anchor[0]:
-                return
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            all_items = tree.get_children()
-            try:
-                a = all_items.index(_drag_anchor[0])
-                b = all_items.index(item)
-            except ValueError:
-                return
-            lo, hi = min(a, b), max(a, b)
-            tree.selection_set(all_items[lo:hi + 1])
-
-        def _on_release(event):
-            _drag_anchor[0] = None
-
-        tree.bind("<Button-1>",         _on_press)
-        tree.bind("<Control-Button-1>", _on_ctrl_press)
-        tree.bind("<B1-Motion>",        _on_drag)
-        tree.bind("<ButtonRelease-1>",  _on_release)
-
-        # ── 全選 / 取消全選 ───────────────────────────────
+        # ── 全選 / 取消全選 / 刪除 ───────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
         sel_row.pack(fill="x", padx=12, pady=(2, 0))
         ctk.CTkButton(sel_row, text="全選",
@@ -270,6 +275,28 @@ class _TrelloTab:
                        command=lambda: tree.selection_remove(tree.get_children()),
                        fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
                        font=FONT_S, width=80, height=26, corner_radius=4
+                       ).pack(side="left", padx=(0, 4))
+
+        def _delete_selected_overview():
+            sel_ids = tree.selection()
+            if not sel_ids:
+                return
+            indices = sorted([tree.index(i) for i in sel_ids], reverse=True)
+            to_remove = [_displayed_cards[i] for i in indices]
+            for card in to_remove:
+                if card in _all_cards:
+                    _all_cards.remove(card)
+                if card in _displayed_cards:
+                    _displayed_cards.remove(card)
+            for iid in sel_ids:
+                tree.delete(iid)
+            prev_title_lbl.configure(
+                text=f"  本周下單卡片（共 {len(_displayed_cards)} 張，可多選）  ")
+
+        ctk.CTkButton(sel_row, text="🗑 刪除選取",
+                       command=_delete_selected_overview,
+                       fg_color="#922b21", hover_color="#7b241c", text_color="white",
+                       font=FONT_S, width=90, height=26, corner_radius=4
                        ).pack(side="left")
 
         # ── 狀態列 & 推送按鈕 ─────────────────────────────
@@ -469,50 +496,9 @@ class _TrelloTab:
         vsb.pack(side="right", fill="y")
 
         # ── 拖曳框選 ──────────────────────────────────────
-        _drag_anchor = [None]
+        _bind_drag_select(tree)
 
-        def _on_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = item
-            tree.selection_set(item)
-
-        def _on_ctrl_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = None
-            if item in tree.selection():
-                tree.selection_remove(item)
-            else:
-                tree.selection_add(item)
-            return "break"
-
-        def _on_drag(event):
-            if not _drag_anchor[0]:
-                return
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            all_items = tree.get_children()
-            try:
-                a = all_items.index(_drag_anchor[0])
-                b = all_items.index(item)
-            except ValueError:
-                return
-            lo, hi = min(a, b), max(a, b)
-            tree.selection_set(all_items[lo:hi + 1])
-
-        def _on_release(event):
-            _drag_anchor[0] = None
-
-        tree.bind("<Button-1>",         _on_press)
-        tree.bind("<Control-Button-1>", _on_ctrl_press)
-        tree.bind("<B1-Motion>",        _on_drag)
-        tree.bind("<ButtonRelease-1>",  _on_release)
-
-        # ── 全選 / 取消全選 ───────────────────────────────
+        # ── 全選 / 取消全選 / 刪除 ───────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
         sel_row.pack(fill="x", padx=12, pady=(2, 0))
         ctk.CTkButton(sel_row, text="全選",
@@ -524,6 +510,27 @@ class _TrelloTab:
                        command=lambda: tree.selection_remove(tree.get_children()),
                        fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
                        font=FONT_S, width=80, height=26, corner_radius=4
+                       ).pack(side="left", padx=(0, 4))
+
+        def _delete_selected_production():
+            sel_ids = tree.selection()
+            if not sel_ids:
+                return
+            to_remove = [_displayed_cards[tree.index(i)] for i in sel_ids]
+            for card in to_remove:
+                if card in _all_cards:
+                    _all_cards.remove(card)
+                if card in _displayed_cards:
+                    _displayed_cards.remove(card)
+            for iid in sel_ids:
+                tree.delete(iid)
+            prev_title_lbl.configure(
+                text=f"  出貨一覽表資料（共 {len(_displayed_cards)} 筆，可多選）  ")
+
+        ctk.CTkButton(sel_row, text="🗑 刪除選取",
+                       command=_delete_selected_production,
+                       fg_color="#922b21", hover_color="#7b241c", text_color="white",
+                       font=FONT_S, width=90, height=26, corner_radius=4
                        ).pack(side="left")
 
         # ── 狀態列 & 寫入按鈕 ─────────────────────────────
@@ -579,6 +586,7 @@ class _TrelloTab:
         GREEN = "#1e8449"
         FONT_S = ("Microsoft JhengHei UI", 9)
 
+        _all_cards:       list[dict] = []
         _displayed_cards: list[dict] = []
 
         # ── 抓取列 ────────────────────────────────────────
@@ -589,9 +597,22 @@ class _TrelloTab:
                       fg_color="transparent", font=FONT_S, text_color=GRAY
                       ).pack(side="left", padx=(0, 12))
 
+        ctk.CTkLabel(fetch_row, text="下單日期 從：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(0, 2))
+        from tkcalendar import DateEntry
+        from datetime import date as _dt_cls
+        date_entry = DateEntry(fetch_row, width=10, date_pattern='y/m/d',
+                                font=FONT_S, maxdate=_dt_cls.today())
+        date_entry.pack(side="left", padx=(0, 2))
+        ctk.CTkButton(fetch_row, text="全部",
+                       command=lambda: _show_all(),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=50, height=28, corner_radius=4
+                       ).pack(side="left", padx=(0, 8))
+
         fetch_status = ctk.CTkLabel(fetch_row, text="", fg_color="transparent",
                                      font=FONT_S, text_color=GRAY)
-        fetch_status.pack(side="left", padx=(8, 0))
+        fetch_status.pack(side="left", padx=(0, 0))
 
         def _parse_date_key(s: str):
             """將 '6/1前'、'5/29' 等格式轉為可排序的 (month, day)，無法解析放最後。"""
@@ -629,6 +650,31 @@ class _TrelloTab:
                 text=f"  出貨一覽表資料（共 {len(records)} 筆，可多選）  ")
             fetch_status.configure(text=f"✔  找到 {len(records)} 筆", text_color=GREEN)
 
+        def _apply_days_filter(base: list | None = None):
+            import re
+            from datetime import date
+            source = base if base is not None else _all_cards
+            from_date = date_entry.get_date()
+            def _parse_d(s):
+                m = re.match(r'(\d{1,2})/(\d{1,2})', str(s).replace("前", "").strip())
+                if m:
+                    try: return date(date.today().year, int(m.group(1)), int(m.group(2)))
+                    except ValueError: pass
+                return None
+            filtered = [r for r in source if (_parse_d(r.get("order_date", "")) or date.min) >= from_date]
+            if base is not None:
+                _all_cards.clear(); _all_cards.extend(source)
+            _populate_tree(filtered)
+            fetch_status.configure(
+                text=f"✔  共 {len(_all_cards)} 筆，篩選後 {len(filtered)} 筆",
+                text_color=GREEN)
+
+        def _show_all():
+            _populate_tree(_all_cards)
+            fetch_status.configure(
+                text=f"✔  共 {len(_all_cards)} 筆（全部顯示）",
+                text_color=GREEN)
+
         def _fetch():
             from sync.syncer_shipping_order import fetch_from_overview
             if not _GSHEETS_CREDS_PATH.exists():
@@ -639,7 +685,7 @@ class _TrelloTab:
                 try:
                     records = fetch_from_overview(_GSHEETS_CREDS_PATH, _GSHEETS_TOKEN_PATH)
                     records.sort(key=lambda r: _parse_date_key(r.get("order_date", "")), reverse=True)
-                    parent.after(0, lambda r=records: _populate_tree(r))
+                    parent.after(0, lambda r=records: _apply_days_filter(r))
                 except Exception as e:
                     from sync.syncer_sheets import _fmt_api_error
                     parent.after(0, lambda e=e: fetch_status.configure(
@@ -650,6 +696,10 @@ class _TrelloTab:
                        fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
                        font=FONT_S, width=120, height=28, corner_radius=4
                        ).pack(side="left")
+        ctk.CTkButton(fetch_row, text="篩選", command=lambda: _apply_days_filter(),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=50, height=28, corner_radius=4
+                       ).pack(side="left", padx=(4, 0))
         ctk.CTkButton(fetch_row, text="地區管理", command=lambda: self._open_location_editor(parent),
                        fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
                        font=FONT_S, width=70, height=28, corner_radius=4
@@ -691,50 +741,9 @@ class _TrelloTab:
         vsb.pack(side="right", fill="y")
 
         # ── 拖曳框選 ──────────────────────────────────────
-        _drag_anchor = [None]
+        _bind_drag_select(tree)
 
-        def _on_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = item
-            tree.selection_set(item)
-
-        def _on_ctrl_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = None
-            if item in tree.selection():
-                tree.selection_remove(item)
-            else:
-                tree.selection_add(item)
-            return "break"
-
-        def _on_drag(event):
-            if not _drag_anchor[0]:
-                return
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            all_items = tree.get_children()
-            try:
-                a = all_items.index(_drag_anchor[0])
-                b = all_items.index(item)
-            except ValueError:
-                return
-            lo, hi = min(a, b), max(a, b)
-            tree.selection_set(all_items[lo:hi + 1])
-
-        def _on_release(event):
-            _drag_anchor[0] = None
-
-        tree.bind("<Button-1>",         _on_press)
-        tree.bind("<Control-Button-1>", _on_ctrl_press)
-        tree.bind("<B1-Motion>",        _on_drag)
-        tree.bind("<ButtonRelease-1>",  _on_release)
-
-        # ── 全選 / 取消全選 ───────────────────────────────
+        # ── 全選 / 取消全選 / 刪除 ───────────────────────────
         sel_row = tk.Frame(parent, bg=BG)
         sel_row.pack(fill="x", padx=12, pady=(2, 0))
         ctk.CTkButton(sel_row, text="全選",
@@ -746,6 +755,25 @@ class _TrelloTab:
                        command=lambda: tree.selection_remove(tree.get_children()),
                        fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
                        font=FONT_S, width=80, height=26, corner_radius=4
+                       ).pack(side="left", padx=(0, 4))
+
+        def _delete_selected_shipping():
+            sel_ids = tree.selection()
+            if not sel_ids:
+                return
+            to_remove = [_displayed_cards[tree.index(i)] for i in sel_ids]
+            for card in to_remove:
+                if card in _displayed_cards:
+                    _displayed_cards.remove(card)
+            for iid in sel_ids:
+                tree.delete(iid)
+            prev_title_lbl.configure(
+                text=f"  出貨一覽表資料（共 {len(_displayed_cards)} 筆，可多選）  ")
+
+        ctk.CTkButton(sel_row, text="🗑 刪除選取",
+                       command=_delete_selected_shipping,
+                       fg_color="#922b21", hover_color="#7b241c", text_color="white",
+                       font=FONT_S, width=90, height=26, corner_radius=4
                        ).pack(side="left")
 
         # ── 狀態列 & 推送按鈕 ─────────────────────────────
@@ -1075,48 +1103,7 @@ class _TrelloTab:
         vsb.pack(side="right", fill="y")
 
         # 拖曳框選
-        _drag_anchor = [None]
-
-        def _on_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = item
-            tree.selection_set(item)
-
-        def _on_ctrl_press(event):
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            _drag_anchor[0] = None
-            if item in tree.selection():
-                tree.selection_remove(item)
-            else:
-                tree.selection_add(item)
-            return "break"
-
-        def _on_drag(event):
-            if not _drag_anchor[0]:
-                return
-            item = tree.identify_row(event.y)
-            if not item:
-                return
-            all_items = tree.get_children()
-            try:
-                a = all_items.index(_drag_anchor[0])
-                b = all_items.index(item)
-            except ValueError:
-                return
-            lo, hi = min(a, b), max(a, b)
-            tree.selection_set(all_items[lo:hi + 1])
-
-        def _on_release(event):
-            _drag_anchor[0] = None
-
-        tree.bind("<Button-1>",         _on_press)
-        tree.bind("<Control-Button-1>", _on_ctrl_press)
-        tree.bind("<B1-Motion>",        _on_drag)
-        tree.bind("<ButtonRelease-1>",  _on_release)
+        _bind_drag_select(tree)
 
         # ── 全選 / 取消全選 ───────────────────────────────
         sel_row = tk.Frame(parent, bg=BG)

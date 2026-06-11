@@ -134,6 +134,28 @@ class _LineTab:
                                                 corner_radius=0)
         thread_scroll.pack(fill="both", expand=True)
 
+        # 我方回覆輸入列（固定於對話串底部）
+        reply_bar = tk.Frame(thread_lf, bg="#e8eaed")
+        reply_bar.pack(fill="x", padx=0, pady=0)
+        tk.Frame(reply_bar, height=1, bg="#cccccc").pack(fill="x")
+        reply_inner = tk.Frame(reply_bar, bg="#e8eaed")
+        reply_inner.pack(fill="x", padx=6, pady=4)
+        reply_var = tk.StringVar()
+        reply_entry = ctk.CTkEntry(
+            reply_inner, textvariable=reply_var, font=FONT_S,
+            placeholder_text="輸入我方回覆…",
+            height=28, corner_radius=4, border_width=1,
+        )
+        reply_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        reply_btn = _ctk_btn(
+            reply_inner, text="送出",
+            fg_color="#2980b9", hover_color="#2471a3",
+            height=28, width=56,
+            command=lambda: _on_send_reply(),
+        )
+        reply_btn.pack(side="left")
+        reply_entry.bind("<Return>", lambda e: _on_send_reply())
+
         # ── 欄三：資料表單（固定寬度）────────────────────────
         col_detail = tk.Frame(body, bg=BG, width=280)
         col_detail.pack(side="left", fill="y")
@@ -161,9 +183,29 @@ class _LineTab:
         _info_row("created_at",   "時間",       1)
         _info_row("status",       "狀態",       2)
 
+        # ── 合併 / 重新辨識按鈕 ──────────────────────────────
+        merge_row = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
+        merge_row.pack(fill="x", padx=8, pady=(4, 0))
+
+        btn_merge = _ctk_btn(
+            merge_row, text="🔀 合併資料",
+            fg_color="#2980b9", hover_color="#2471a3",
+            height=26, width=118,
+            command=lambda: _on_merge_fields(),
+        )
+        btn_merge.pack(side="left", padx=(0, 4))
+
+        btn_reextract = _ctk_btn(
+            merge_row, text="♻ 重新辨識",
+            fg_color="#7d3c98", hover_color="#6c3483",
+            height=26, width=118,
+            command=lambda: _on_reextract(),
+        )
+        btn_reextract.pack(side="left")
+
         ctk.CTkLabel(detail_lf, text="Gemini 辨識結果（可手動補填）：",
                       fg_color="transparent", font=FONT_S, text_color=GRAY,
-                      anchor="w").pack(anchor="w", padx=8, pady=(6, 1))
+                      anchor="w").pack(anchor="w", padx=8, pady=(4, 1))
 
         # 操作按鈕（固定底部）
         btn_frame = ctk.CTkFrame(detail_lf, fg_color="transparent", corner_radius=0)
@@ -177,9 +219,9 @@ class _LineTab:
 
         ctk.CTkLabel(bottom_frame, text="類型：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).grid(row=0, column=0, sticky="w", pady=3)
-        type_var = tk.StringVar(value="未分類")
+        type_var = tk.StringVar(value="新產品詢問")
         ctk.CTkOptionMenu(bottom_frame, variable=type_var,
-                           values=["未分類", "新產品詢問", "維修需求", "其他"],
+                           values=["新產品詢問", "維修需求"],
                            font=FONT_S, width=110, height=26, corner_radius=4
                            ).grid(row=0, column=1, sticky="w", padx=(2, 8), pady=3)
 
@@ -318,12 +360,57 @@ class _LineTab:
                 if uid != _selected_user[0]: _set_bg_all(c, "#f0faf5")
             def on_leave(e, c=card, uid=user_id):
                 if uid != _selected_user[0]: _set_bg_all(c, "#ffffff")
+            def on_right_click(e, uid=user_id): _show_card_menu(uid, e.x_root, e.y_root)
             def _bind_w(w):
                 w.bind("<Button-1>", on_click)
+                w.bind("<Button-3>", on_right_click)
                 w.bind("<Enter>",    on_enter)
                 w.bind("<Leave>",    on_leave)
                 for child in w.winfo_children(): _bind_w(child)
             _bind_w(card)
+
+        def _show_card_menu(user_id: str, x: int, y: int):
+            name = (_card_frames.get(user_id) and
+                    _card_frames[user_id].winfo_children() and
+                    "") or ""
+            # 取顯示名稱
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                row = conn.execute(
+                    "SELECT display_name FROM line_inquiries "
+                    "WHERE line_user_id=? LIMIT 1", (user_id,)
+                ).fetchone()
+                name = row[0] if row else "此顧客"
+            finally:
+                conn.close()
+
+            menu = tk.Menu(parent, tearoff=0)
+            menu.add_command(
+                label=f"刪除「{name}」的所有紀錄",
+                foreground="#c0392b",
+                command=lambda uid=user_id, n=name: _delete_user(uid, n),
+            )
+            menu.tk_popup(x, y)
+
+        def _delete_user(user_id: str, name: str):
+            if not messagebox.askyesno(
+                "確認刪除",
+                f"確定要刪除「{name}」的所有詢問紀錄？\n此操作無法復原。",
+                parent=self,
+            ):
+                return
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                conn.execute(
+                    "DELETE FROM line_inquiries WHERE line_user_id=?", (user_id,)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            status_bar.configure(text=f"已刪除「{name}」的所有紀錄", text_color=GRAY)
+            _refresh()
 
         def _on_card_click(user_id: str):
             for uid, frame in _card_frames.items():
@@ -335,81 +422,94 @@ class _LineTab:
             from core.db import get_connection
             conn = get_connection()
             try:
-                sf = status_var.get()
-                if sf == "全部":
-                    rows = conn.execute(
-                        "SELECT * FROM line_inquiries WHERE line_user_id=? "
-                        "ORDER BY created_at ASC", (user_id,)
-                    ).fetchall()
-                else:
-                    rows = conn.execute(
-                        "SELECT * FROM line_inquiries WHERE line_user_id=? AND status=? "
-                        "ORDER BY created_at ASC", (user_id, sf)
-                    ).fetchall()
+                # 對話串永遠顯示全部訊息（含我方回覆），篩選器只影響左側卡片列表
+                rows = conn.execute(
+                    "SELECT * FROM line_inquiries WHERE line_user_id=? "
+                    "ORDER BY created_at ASC", (user_id,)
+                ).fetchall()
             finally:
                 conn.close()
 
             msgs = [dict(r) for r in rows]
-            name = msgs[0]["display_name"] if msgs else "未知顧客"
+            # 找顧客名稱（排除我方訊息）
+            customer_msgs = [m for m in msgs if m.get("sender") != "staff"]
+            name = customer_msgs[0]["display_name"] if customer_msgs else "未知顧客"
             thread_name_lbl.configure(text=name, fg="#111111")
             _show_thread(msgs)
 
         # ── 中欄：對話串氣泡 ──────────────────────────────────
         def _build_bubble(msg_data: dict):
             mid    = msg_data["id"]
+            sender = msg_data.get("sender", "customer")
+            is_staff = (sender == "staff")
             status = msg_data.get("status", "待處理")
             t      = (msg_data.get("created_at") or "")[:16]
             text   = msg_data.get("message", "")
             stat_color = _STATUS_COLOR.get(status, GRAY)
             BBGN = "#f5f5f5"
 
-            outer = tk.Frame(thread_scroll, bg=BBGN, cursor="hand2")
+            outer = tk.Frame(thread_scroll, bg=BBGN, cursor="hand2" if not is_staff else "arrow")
             outer.pack(fill="x", padx=8, pady=4)
 
             # 時間 + 狀態
             hdr = tk.Frame(outer, bg=BBGN)
             hdr.pack(fill="x", padx=2)
-            tk.Label(hdr, text=t, bg=BBGN,
-                     font=("Microsoft JhengHei UI", 7), fg="#b2bec3").pack(side="left")
-            tk.Label(hdr, text=status, bg=BBGN,
-                     font=("Microsoft JhengHei UI", 7), fg=stat_color).pack(side="right")
+            if is_staff:
+                tk.Label(hdr, text="我方", bg=BBGN,
+                         font=("Microsoft JhengHei UI", 7), fg="#2980b9").pack(side="right")
+                tk.Label(hdr, text=t, bg=BBGN,
+                         font=("Microsoft JhengHei UI", 7), fg="#b2bec3").pack(side="right", padx=(0, 4))
+            else:
+                tk.Label(hdr, text=t, bg=BBGN,
+                         font=("Microsoft JhengHei UI", 7), fg="#b2bec3").pack(side="left")
+                tk.Label(hdr, text=status, bg=BBGN,
+                         font=("Microsoft JhengHei UI", 7), fg=stat_color).pack(side="right")
 
-            # 訊息氣泡（左對齊，模擬顧客訊息）
+            # 訊息氣泡（顧客左對齊、我方右對齊）
             bub_wrap = tk.Frame(outer, bg=BBGN)
             bub_wrap.pack(fill="x", pady=(2, 2))
-            bub = tk.Frame(bub_wrap, bg="#ffffff", padx=10, pady=7,
-                           relief="flat", bd=0)
-            bub.pack(side="left", padx=(4, 40))
 
-            # 使用 tk.Text 支援長訊息自動換行
-            txt_widget = tk.Text(bub, font=FONT_S, fg="#2d3436", bg="#ffffff",
+            if is_staff:
+                bub_bg = "#dbeeff"
+                bub = tk.Frame(bub_wrap, bg=bub_bg, padx=10, pady=7, relief="flat", bd=0)
+                bub.pack(side="right", padx=(40, 4))
+            else:
+                bub_bg = "#ffffff"
+                bub = tk.Frame(bub_wrap, bg=bub_bg, padx=10, pady=7, relief="flat", bd=0)
+                bub.pack(side="left", padx=(4, 40))
+
+            txt_widget = tk.Text(bub, font=FONT_S, fg="#2d3436", bg=bub_bg,
                                  wrap="word", relief="flat", borderwidth=0,
                                  highlightthickness=0, cursor="arrow",
                                  state="normal", width=32)
             txt_widget.insert("1.0", text)
             txt_widget.configure(state="disabled")
             txt_widget.pack(fill="x")
-            # 動態調整高度
-            lines = int(txt_widget.index("end-1c").split(".")[0])
-            txt_widget.configure(height=max(1, lines))
+            def _fix_height(w=txt_widget):
+                w.update_idletasks()
+                wrapped = w.count("1.0", "end", "displaylines")
+                h = wrapped[0] if wrapped else 1
+                w.configure(height=max(1, h))
+            txt_widget.after(10, _fix_height)
 
-            # 底線分隔
             tk.Frame(outer, height=1, bg="#ebebeb").pack(fill="x", pady=(2, 0))
 
             _thread_bubbles.append(outer)
 
-            def on_click(e, m=mid, b=outer): _on_bubble_click(m, b)
-            def on_enter(e, b=outer):
-                if _selected_bubble[0] is not b: _set_bg_all(b, "#eaf4fb")
-            def on_leave(e, b=outer):
-                if _selected_bubble[0] is not b: _set_bg_all(b, BBGN)
+            # 顧客訊息才能點選載入表單
+            if not is_staff:
+                def on_click(e, m=mid, b=outer): _on_bubble_click(m, b)
+                def on_enter(e, b=outer):
+                    if _selected_bubble[0] is not b: _set_bg_all(b, "#eaf4fb")
+                def on_leave(e, b=outer):
+                    if _selected_bubble[0] is not b: _set_bg_all(b, BBGN)
 
-            def _bind_w(w):
-                w.bind("<Button-1>", on_click)
-                w.bind("<Enter>",    on_enter)
-                w.bind("<Leave>",    on_leave)
-                for child in w.winfo_children(): _bind_w(child)
-            _bind_w(outer)
+                def _bind_w(w):
+                    w.bind("<Button-1>", on_click)
+                    w.bind("<Enter>",    on_enter)
+                    w.bind("<Leave>",    on_leave)
+                    for child in w.winfo_children(): _bind_w(child)
+                _bind_w(outer)
 
         def _show_thread(msgs: list[dict]):
             for w in list(thread_scroll.winfo_children()): w.destroy()
@@ -528,7 +628,7 @@ class _LineTab:
             try:
                 conn.execute(
                     "UPDATE line_inquiries SET status=?, trello_card_id=?, "
-                    "updated_at=datetime('now','localtime') WHERE id=?",
+                    "updated_at=datetime('now','+8 hours') WHERE id=?",
                     (new_status, trello_card_id, inquiry_id),
                 )
                 conn.commit()
@@ -541,7 +641,7 @@ class _LineTab:
             try:
                 conn.execute(
                     "UPDATE line_inquiries SET inquiry_type=?, "
-                    "updated_at=datetime('now','localtime') WHERE id=?",
+                    "updated_at=datetime('now','+8 hours') WHERE id=?",
                     (new_type, inquiry_id),
                 )
                 conn.commit()
@@ -612,12 +712,188 @@ class _LineTab:
             _detail_labels["status"].configure(
                 text=status, text_color=_STATUS_COLOR.get(status, GRAY)
             )
-            type_var.set(row_data.get("inquiry_type", "未分類"))
+            type_var.set(row_data.get("inquiry_type") or "新產品詢問")
             for key, var in _field_vars.items():
                 var.set(row_data.get(key, "") or "")
             is_pending = (status == "待處理")
             btn_create.configure(state="normal" if is_pending else "disabled")
             btn_ignore.configure(state="normal" if is_pending else "disabled")
+
+        # ══════════════════════════════════════════════════════
+        #  合併資料 / 重新辨識
+        # ══════════════════════════════════════════════════════
+        _STRUCT_KEYS = [
+            "company_name", "tax_id", "contact_name", "mobile", "phone",
+            "fax", "address", "email", "inquiry_product", "area",
+        ]
+
+        def _get_all_user_msgs() -> list[dict]:
+            uid = _selected_user[0]
+            if not uid:
+                return []
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                return [dict(r) for r in conn.execute(
+                    "SELECT * FROM line_inquiries WHERE line_user_id=? "
+                    "ORDER BY created_at ASC", (uid,)
+                ).fetchall()]
+            finally:
+                conn.close()
+
+        def _on_send_reply():
+            """透過 LINE Push API 發送回覆給顧客，並即時顯示於對話串。"""
+            uid = _selected_user[0]
+            if not uid:
+                return
+            text = reply_var.get().strip()
+            if not text:
+                return
+
+            srv_cfg = self._config.get("line_server", {})
+            url    = srv_cfg.get("url", "").rstrip("/")
+            secret = srv_cfg.get("secret", "")
+            if not url:
+                status_bar.configure(text="⚠  未設定伺服器網址", text_color="#e67e22")
+                return
+
+            reply_btn.configure(state="disabled")
+            status_bar.configure(text="⏳  發送中…", text_color="#e67e22")
+
+            def _do_send():
+                try:
+                    import requests as _req
+                    resp = _req.post(
+                        f"{url}/api/push_message",
+                        json={"to": uid, "message": text},
+                        headers={"X-API-Secret": secret,
+                                 "Content-Type": "application/json"},
+                        timeout=15,
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+                    if not result.get("ok"):
+                        raise RuntimeError(result.get("error", "未知錯誤"))
+                    record = result["record"]
+                    self.after(0, lambda r=record: _on_send_done(r))
+                except Exception as e:
+                    self.after(0, lambda err=e: _on_send_error(err))
+
+            def _on_send_done(record: dict):
+                reply_var.set("")
+                reply_btn.configure(state="normal")
+                status_bar.configure(text="✔  訊息已發送", text_color="#1e8449")
+                # 直接寫入本機 DB，不等下次同步
+                from core.db import get_connection
+                conn = get_connection()
+                try:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO line_inquiries
+                            (id, line_user_id, display_name, message, sender,
+                             status, inquiry_type, created_at, updated_at)
+                        VALUES (?,?,?,?,?,?,?,?,?)
+                    """, (record["id"], record["line_user_id"], record["display_name"],
+                          record["message"], record.get("sender", "staff"),
+                          record["status"], record.get("inquiry_type", ""),
+                          record["created_at"], record["updated_at"]))
+                    conn.commit()
+                finally:
+                    conn.close()
+                # 重新載入對話串
+                from core.db import get_connection as _gc
+                c = _gc()
+                try:
+                    rows = [dict(r) for r in c.execute(
+                        "SELECT * FROM line_inquiries WHERE line_user_id=? "
+                        "ORDER BY created_at ASC", (uid,)
+                    ).fetchall()]
+                finally:
+                    c.close()
+                _show_thread(rows)
+
+            def _on_send_error(err):
+                reply_btn.configure(state="normal")
+                status_bar.configure(text=f"✕  發送失敗：{err}", text_color="#c0392b")
+
+            threading.Thread(target=_do_send, daemon=True).start()
+
+        def _on_merge_fields():
+            """從該顧客所有訊息的結構化欄位，取每欄第一個非空值填入表單。"""
+            msgs = _get_all_user_msgs()
+            if not msgs:
+                return
+            merged = {}
+            for key in _STRUCT_KEYS:
+                for m in msgs:
+                    val = (m.get(key) or "").strip()
+                    if val:
+                        merged[key] = val
+                        break
+            for key, var in _field_vars.items():
+                if merged.get(key):
+                    var.set(merged[key])
+            status_bar.configure(text="✔  已從所有訊息合併欄位資料", text_color="#1e8449")
+
+        def _on_reextract():
+            """把該顧客所有訊息（含我方回覆）串接，重新送 Gemini 辨識，結果填入表單。"""
+            msgs = _get_all_user_msgs()
+            if not msgs:
+                return
+            lines = []
+            for m in msgs:
+                text = (m.get("message") or "").strip()
+                if not text:
+                    continue
+                prefix = "我方" if m.get("sender") == "staff" else "顧客"
+                lines.append(f"{prefix}：{text}")
+            combined = "\n".join(lines)
+            if not combined.strip():
+                status_bar.configure(text="⚠  無可辨識的訊息文字", text_color="#e67e22")
+                return
+
+            srv_cfg = self._config.get("line_server", {})
+            url    = srv_cfg.get("url", "").rstrip("/")
+            secret = srv_cfg.get("secret", "")
+
+            status_bar.configure(text="⏳  正在送 Gemini 重新辨識…", text_color="#e67e22")
+            btn_reextract.configure(state="disabled")
+            btn_merge.configure(state="disabled")
+
+            def _do_extract():
+                try:
+                    import requests as _req
+                    if url:
+                        # 透過 Railway server 的 Gemini API
+                        resp = _req.post(
+                            f"{url}/api/extract_text",
+                            json={"message": combined},
+                            headers={"X-API-Secret": secret,
+                                     "Content-Type": "application/json"},
+                            timeout=30,
+                        )
+                        resp.raise_for_status()
+                        info = resp.json()
+                    else:
+                        raise RuntimeError("未設定伺服器網址")
+                    self.after(0, lambda i=info: _on_extract_done(i))
+                except Exception as e:
+                    self.after(0, lambda err=e: _on_extract_error(err))
+
+            def _on_extract_done(info: dict):
+                for key, var in _field_vars.items():
+                    val = info.get(key, "")
+                    if val:
+                        var.set(val)
+                status_bar.configure(text="✔  Gemini 重新辨識完成", text_color="#1e8449")
+                btn_reextract.configure(state="normal")
+                btn_merge.configure(state="normal")
+
+            def _on_extract_error(err):
+                status_bar.configure(text=f"✕  辨識失敗：{err}", text_color="#c0392b")
+                btn_reextract.configure(state="normal")
+                btn_merge.configure(state="normal")
+
+            threading.Thread(target=_do_extract, daemon=True).start()
 
         # ══════════════════════════════════════════════════════
         #  建立 Trello 卡片

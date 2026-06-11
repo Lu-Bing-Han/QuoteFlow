@@ -303,8 +303,10 @@ def list_inquiries():
             "SELECT * FROM line_inquiries ORDER BY created_at DESC"
         ).fetchall()
     else:
+        # 無論篩選條件，always 包含 sender='staff' 的我方回覆
         rows = c.execute(
-            "SELECT * FROM line_inquiries WHERE status=? ORDER BY created_at DESC",
+            "SELECT * FROM line_inquiries WHERE status=? OR sender='staff' "
+            "ORDER BY created_at DESC",
             (status,),
         ).fetchall()
     c.close()
@@ -328,6 +330,53 @@ def update_inquiry(inquiry_id: int):
     c.commit()
     c.close()
     return jsonify({"ok": True})
+
+
+@app.route("/api/push_message", methods=["POST"])
+def push_message():
+    """發送 LINE Push Message 給顧客，並將訊息存入 DB。"""
+    _auth()
+    data    = request.json or {}
+    to      = data.get("to", "").strip()
+    message = data.get("message", "").strip()
+    if not to or not message:
+        return jsonify({"ok": False, "error": "missing to or message"}), 400
+
+    import urllib.request as _ur
+    body = json.dumps({
+        "to": to,
+        "messages": [{"type": "text", "text": message}],
+    }).encode()
+    req = _ur.Request(
+        "https://api.line.me/v2/bot/message/push",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {CHANNEL_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with _ur.urlopen(req, timeout=10):
+            pass
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    c = _conn()
+    c.execute("""
+        INSERT INTO line_inquiries
+            (line_user_id, display_name, message, sender, status,
+             inquiry_type, created_at, updated_at)
+        VALUES (?, '我方', ?, 'staff', '已忽略', '',
+                datetime('now','+8 hours'), datetime('now','+8 hours'))
+    """, (to, message))
+    c.commit()
+    row_id = c.lastrowid
+    row = dict(c.execute(
+        "SELECT * FROM line_inquiries WHERE id=?", (row_id,)
+    ).fetchone())
+    c.close()
+    return jsonify({"ok": True, "record": row})
 
 
 @app.route("/api/extract_text", methods=["POST"])
