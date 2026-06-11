@@ -718,7 +718,37 @@ class _LineTab:
         # ══════════════════════════════════════════════════════
         #  UI 更新
         # ══════════════════════════════════════════════════════
+        def _merge_local_duplicates():
+            """合併本機 DB 中同名但不同 line_user_id 的記錄。"""
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                dup_names = [r[0] for r in conn.execute("""
+                    SELECT display_name FROM line_inquiries
+                    GROUP BY TRIM(display_name)
+                    HAVING COUNT(DISTINCT line_user_id) > 1
+                """).fetchall()]
+                for name in dup_names:
+                    uids = [r[0] for r in conn.execute("""
+                        SELECT line_user_id FROM line_inquiries
+                        WHERE TRIM(display_name)=TRIM(?)
+                        GROUP BY line_user_id
+                        ORDER BY MIN(created_at) ASC
+                    """, (name,)).fetchall()]
+                    if len(uids) > 1:
+                        canonical = uids[0]
+                        placeholders = ",".join("?" * (len(uids) - 1))
+                        conn.execute(
+                            f"UPDATE line_inquiries SET line_user_id=? "
+                            f"WHERE line_user_id IN ({placeholders})",
+                            [canonical] + uids[1:],
+                        )
+                conn.commit()
+            finally:
+                conn.close()
+
         def _refresh():
+            _merge_local_duplicates()
             status_bar.configure(text="⏳  正在從伺服器同步…", text_color="#e67e22")
             parent.update_idletasks()
             try:

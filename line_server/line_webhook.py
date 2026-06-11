@@ -127,20 +127,21 @@ def _init_db():
 
 
 def _merge_duplicate_names():
-    """將相同 display_name 但不同 line_user_id 的記錄合併為最舊那個 ID。"""
+    """將相同 display_name（忽略空白）但不同 line_user_id 的記錄合併為最舊那個 ID。"""
     conn = _conn()
     cur  = conn.cursor()
     cur.execute("""
-        SELECT display_name
+        SELECT TRIM(display_name) as name
         FROM line_inquiries
-        GROUP BY display_name
+        GROUP BY TRIM(display_name)
         HAVING COUNT(DISTINCT line_user_id) > 1
     """)
-    names = [r["display_name"] for r in cur.fetchall()]
+    names = [r["name"] for r in cur.fetchall()]
+    print(f"[merge] 找到 {len(names)} 個需要合併的名稱: {names}", flush=True)
     for name in names:
         cur.execute("""
             SELECT line_user_id FROM line_inquiries
-            WHERE display_name = %s
+            WHERE TRIM(display_name) = %s
             GROUP BY line_user_id
             ORDER BY MIN(created_at) ASC
         """, (name,))
