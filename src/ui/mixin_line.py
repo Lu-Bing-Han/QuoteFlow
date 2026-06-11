@@ -637,6 +637,7 @@ class _LineTab:
                              {", ".join(struct_fields)})
                         VALUES (?,?,?,?,?,?,?,?,?,{",".join("?" * len(struct_fields))})
                         ON CONFLICT(id) DO UPDATE SET
+                            line_user_id   = excluded.line_user_id,
                             display_name   = excluded.display_name,
                             message        = excluded.message,
                             inquiry_type   = excluded.inquiry_type,
