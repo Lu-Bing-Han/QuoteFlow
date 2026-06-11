@@ -126,7 +126,41 @@ def _init_db():
     conn.close()
 
 
+def _merge_duplicate_names():
+    """將相同 display_name 但不同 line_user_id 的記錄合併為最舊那個 ID。"""
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute("""
+        SELECT display_name
+        FROM line_inquiries
+        GROUP BY display_name
+        HAVING COUNT(DISTINCT line_user_id) > 1
+    """)
+    names = [r["display_name"] for r in cur.fetchall()]
+    for name in names:
+        cur.execute("""
+            SELECT line_user_id FROM line_inquiries
+            WHERE display_name = %s
+            GROUP BY line_user_id
+            ORDER BY MIN(created_at) ASC
+        """, (name,))
+        uids = [r["line_user_id"] for r in cur.fetchall()]
+        if len(uids) > 1:
+            canonical    = uids[0]
+            placeholders = ",".join(["%s"] * (len(uids) - 1))
+            cur.execute(
+                f"UPDATE line_inquiries SET line_user_id=%s "
+                f"WHERE line_user_id IN ({placeholders})",
+                [canonical] + uids[1:],
+            )
+            print(f"[merge] '{name}': {len(uids)} IDs → {canonical}", flush=True)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 _init_db()
+_merge_duplicate_names()
 
 
 # ── Gemini 辨識 ───────────────────────────────────────────
@@ -396,6 +430,40 @@ def push_message():
     cur.close()
     conn.close()
     return jsonify({"ok": True, "record": row})
+
+
+@app.route("/api/merge_by_name", methods=["POST"])
+def merge_by_name():
+    _auth()
+    data         = request.json or {}
+    display_name = data.get("display_name", "").strip()
+    if not display_name:
+        return jsonify({"ok": False, "error": "missing display_name"}), 400
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute("""
+        SELECT line_user_id
+        FROM line_inquiries
+        WHERE display_name = %s
+        GROUP BY line_user_id
+        ORDER BY MIN(created_at) ASC
+    """, (display_name,))
+    uids = [r["line_user_id"] for r in cur.fetchall()]
+    if len(uids) <= 1:
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True, "merged": 0, "canonical": uids[0] if uids else None})
+    canonical     = uids[0]
+    placeholders  = ",".join(["%s"] * (len(uids) - 1))
+    cur.execute(
+        f"UPDATE line_inquiries SET line_user_id=%s WHERE line_user_id IN ({placeholders})",
+        [canonical] + uids[1:],
+    )
+    merged = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True, "merged": merged, "canonical": canonical})
 
 
 @app.route("/api/extract_text", methods=["POST"])

@@ -370,10 +370,6 @@ class _LineTab:
             _bind_w(card)
 
         def _show_card_menu(user_id: str, x: int, y: int):
-            name = (_card_frames.get(user_id) and
-                    _card_frames[user_id].winfo_children() and
-                    "") or ""
-            # 取顯示名稱
             from core.db import get_connection
             conn = get_connection()
             try:
@@ -382,16 +378,86 @@ class _LineTab:
                     "WHERE line_user_id=? LIMIT 1", (user_id,)
                 ).fetchone()
                 name = row[0] if row else "此顧客"
+                dup_count = conn.execute(
+                    "SELECT COUNT(DISTINCT line_user_id) FROM line_inquiries WHERE display_name=?",
+                    (name,)
+                ).fetchone()[0]
             finally:
                 conn.close()
 
             menu = tk.Menu(parent, tearoff=0)
+            if dup_count > 1:
+                menu.add_command(
+                    label=f"合併「{name}」的 {dup_count} 張同名卡片",
+                    command=lambda uid=user_id, n=name: _merge_by_name(uid, n),
+                )
+                menu.add_separator()
             menu.add_command(
                 label=f"刪除「{name}」的所有紀錄",
                 foreground="#c0392b",
                 command=lambda uid=user_id, n=name: _delete_user(uid, n),
             )
             menu.tk_popup(x, y)
+
+        def _merge_by_name(user_id: str, name: str):
+            from core.db import get_connection
+            conn = get_connection()
+            try:
+                uids = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT line_user_id FROM line_inquiries WHERE display_name=?",
+                    (name,)
+                ).fetchall()]
+            finally:
+                conn.close()
+
+            if not messagebox.askyesno(
+                "確認合併",
+                f"找到 {len(uids)} 張名稱為「{name}」的卡片。\n確定要合併為一張？\n（會保留最舊的那筆 LINE ID）",
+                parent=self,
+            ):
+                return
+
+            canonical_uid = None
+            url = _srv_url()
+            if url:
+                try:
+                    import requests as _req
+                    resp = _req.post(
+                        f"{url}/api/merge_by_name",
+                        json={"display_name": name},
+                        headers=_srv_headers(), timeout=10,
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+                    if result.get("ok"):
+                        canonical_uid = result.get("canonical")
+                except Exception as e:
+                    status_bar.configure(text=f"⚠  伺服器合併失敗：{e}", text_color="#e67e22")
+                    return
+
+            from core.db import get_connection as _gc
+            conn = _gc()
+            try:
+                if not canonical_uid:
+                    row = conn.execute(
+                        "SELECT line_user_id FROM line_inquiries WHERE display_name=? "
+                        "ORDER BY created_at ASC LIMIT 1", (name,)
+                    ).fetchone()
+                    canonical_uid = row[0] if row else user_id
+                conn.execute(
+                    "UPDATE line_inquiries SET line_user_id=? "
+                    "WHERE display_name=? AND line_user_id!=?",
+                    (canonical_uid, name, canonical_uid)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            status_bar.configure(
+                text=f"✔  已將「{name}」的 {len(uids)} 張卡片合併為一張",
+                text_color="#1e8449",
+            )
+            _refresh()
 
         def _delete_user(user_id: str, name: str):
             if not messagebox.askyesno(
