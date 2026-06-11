@@ -1,17 +1,18 @@
 """
-line_webhook.py — LINE Messaging API Webhook Server
+line_webhook.py — LINE Messaging API Webhook Server (PostgreSQL)
 
-接收顧客訊息 → Gemini 辨識結構化資料 → 存入 SQLite → 提供 REST API 讓 QuoteFlow 同步。
+接收顧客訊息 → Gemini 辨識結構化資料 → 存入 PostgreSQL → 提供 REST API 讓 QuoteFlow 同步。
 
 環境變數（在 Railway 的 Variables 頁面設定）：
   LINE_CHANNEL_SECRET       — LINE Messaging API Channel Secret
   LINE_CHANNEL_ACCESS_TOKEN — LINE Channel Access Token
   API_SECRET                — 自訂字串，QuoteFlow 連線時用來驗證身份
   GEMINI_API_KEY            — Google Gemini API 金鑰
+  DATABASE_URL              — Railway PostgreSQL 自動注入
   PORT                      — Railway 自動注入，不需手動設定
 """
-import base64, hashlib, hmac, json, os, sqlite3
-from pathlib import Path
+import base64, hashlib, hmac, json, os
+from datetime import datetime, timezone, timedelta
 
 from flask import Flask, abort, jsonify, request
 
@@ -22,7 +23,9 @@ CHANNEL_TOKEN  = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 API_SECRET     = os.environ.get("API_SECRET", "change-me-before-deploy")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-DB_PATH = Path("line_inquiries.db")
+_raw_db_url   = os.environ.get("DATABASE_URL", "")
+DATABASE_URL  = _raw_db_url.replace("postgres://", "postgresql://", 1) \
+                if _raw_db_url.startswith("postgres://") else _raw_db_url
 
 _EMPTY_INFO = {
     "company_name":    "",
@@ -54,22 +57,32 @@ _FIELD_PROMPT = """欄位說明：
 只回傳 JSON 物件，不要包含 markdown 或其他文字。"""
 
 
-# ── 資料庫 ────────────────────────────────────────────────────
+# ── 時間 ─────────────────────────────────────────────────
 
-def _conn() -> sqlite3.Connection:
-    c = sqlite3.connect(str(DB_PATH), timeout=10)
-    c.row_factory = sqlite3.Row
-    return c
+def _now_tw() -> str:
+    """台灣時間（UTC+8）字串 YYYY-MM-DD HH:MM:SS"""
+    tz = timezone(timedelta(hours=8))
+    return datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+
+
+# ── 資料庫 ────────────────────────────────────────────────
+
+def _conn():
+    import psycopg2
+    import psycopg2.extras
+    return psycopg2.connect(DATABASE_URL,
+                            cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 def _init_db():
-    c = _conn()
-    c.executescript("""
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS line_inquiries (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            id              SERIAL PRIMARY KEY,
             line_user_id    TEXT    NOT NULL,
             display_name    TEXT    DEFAULT '未知顧客',
-            message         TEXT    NOT NULL,
+            message         TEXT    NOT NULL DEFAULT '',
             inquiry_type    TEXT    DEFAULT '未分類',
             status          TEXT    DEFAULT '待處理',
             trello_card_id  TEXT,
@@ -83,9 +96,10 @@ def _init_db():
             email           TEXT    DEFAULT '',
             inquiry_product TEXT    DEFAULT '',
             area            TEXT    DEFAULT '',
-            created_at      TEXT    DEFAULT (datetime('now','+8 hours')),
-            updated_at      TEXT    DEFAULT (datetime('now','+8 hours'))
-        );
+            sender          TEXT    DEFAULT 'customer',
+            created_at      TEXT,
+            updated_at      TEXT
+        )
     """)
     new_cols = [
         ("company_name",    "TEXT DEFAULT ''"),
@@ -102,17 +116,20 @@ def _init_db():
     ]
     for col, typedef in new_cols:
         try:
-            c.execute(f"ALTER TABLE line_inquiries ADD COLUMN {col} {typedef}")
+            cur.execute(
+                f"ALTER TABLE line_inquiries ADD COLUMN IF NOT EXISTS {col} {typedef}"
+            )
         except Exception:
             pass
-    c.commit()
-    c.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 _init_db()
 
 
-# ── Gemini 辨識 ───────────────────────────────────────────────
+# ── Gemini 辨識 ───────────────────────────────────────────
 
 def _parse_json(text: str) -> dict:
     text = text.strip()
@@ -131,7 +148,6 @@ def _gemini_client():
 
 
 def _gemini_generate(client, contents, retries: int = 3, delay: float = 3.0):
-    """呼叫 Gemini，遇到 503 UNAVAILABLE 時自動重試最多 retries 次。"""
     import time
     last_err = None
     for attempt in range(retries):
@@ -141,7 +157,6 @@ def _gemini_generate(client, contents, retries: int = 3, delay: float = 3.0):
             last_err = e
             err_str = str(e)
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                # 每日額度耗盡，重試無效
                 raise
             elif "503" in err_str or "UNAVAILABLE" in err_str:
                 wait = delay * (attempt + 1)
@@ -153,7 +168,6 @@ def _gemini_generate(client, contents, retries: int = 3, delay: float = 3.0):
 
 
 def _extract_info(message: str) -> dict:
-    """從文字訊息提取結構化資訊。"""
     if not GEMINI_API_KEY:
         print("[Gemini text SKIP] GEMINI_API_KEY 未設定", flush=True)
         return dict(_EMPTY_INFO)
@@ -174,7 +188,6 @@ def _extract_info(message: str) -> dict:
 
 
 def _download_image(message_id: str) -> bytes | None:
-    """從 LINE Content API 下載圖片。"""
     import urllib.request
     req = urllib.request.Request(
         f"https://api-data.line.me/v2/bot/message/{message_id}/content",
@@ -189,19 +202,16 @@ def _download_image(message_id: str) -> bytes | None:
 
 
 def _extract_info_from_image(image_bytes: bytes) -> dict:
-    """從圖片（名片等）提取結構化資訊。"""
     if not GEMINI_API_KEY:
         print("[Gemini image SKIP] GEMINI_API_KEY 未設定", flush=True)
         return dict(_EMPTY_INFO)
     if not image_bytes:
-        print("[Gemini image SKIP] 圖片下載失敗，image_bytes 為空", flush=True)
         return dict(_EMPTY_INFO)
     try:
         import io
         import PIL.Image
         from google.genai import types
 
-        # 統一轉成 JPEG，相容 JFIF / PNG / WebP 等格式
         img = PIL.Image.open(io.BytesIO(image_bytes)).convert("RGB")
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
@@ -223,7 +233,7 @@ def _extract_info_from_image(image_bytes: bytes) -> dict:
         return dict(_EMPTY_INFO)
 
 
-# ── LINE 工具函式 ─────────────────────────────────────────────
+# ── LINE 工具函式 ─────────────────────────────────────────
 
 def _verify_signature(body: bytes, signature: str) -> bool:
     digest = hmac.new(CHANNEL_SECRET.encode(), body, hashlib.sha256).digest()
@@ -243,7 +253,7 @@ def _get_display_name(user_id: str) -> str:
         return "未知顧客"
 
 
-# ── Webhook ───────────────────────────────────────────────────
+# ── Webhook ───────────────────────────────────────────────
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -270,24 +280,29 @@ def webhook():
         else:
             continue
 
-        c = _conn()
-        c.execute("""
+        now  = _now_tw()
+        conn = _conn()
+        cur  = conn.cursor()
+        cur.execute("""
             INSERT INTO line_inquiries
                 (line_user_id, display_name, message,
                  company_name, tax_id, contact_name, mobile, phone,
-                 fax, address, email, inquiry_product, area)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 fax, address, email, inquiry_product, area,
+                 created_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (user_id, display_name, text,
               info["company_name"], info["tax_id"], info["contact_name"],
               info["mobile"], info["phone"], info["fax"],
-              info["address"], info["email"], info["inquiry_product"], info["area"]))
-        c.commit()
-        c.close()
+              info["address"], info["email"], info["inquiry_product"], info["area"],
+              now, now))
+        conn.commit()
+        cur.close()
+        conn.close()
 
     return "OK", 200
 
 
-# ── REST API（供 QuoteFlow 桌面 app 呼叫）────────────────────
+# ── REST API（供 QuoteFlow 桌面 app 呼叫）────────────────
 
 def _auth():
     if request.headers.get("X-API-Secret") != API_SECRET:
@@ -298,44 +313,45 @@ def _auth():
 def list_inquiries():
     _auth()
     status = request.args.get("status", "待處理")
-    c = _conn()
+    conn = _conn()
+    cur  = conn.cursor()
     if status == "全部":
-        rows = c.execute(
-            "SELECT * FROM line_inquiries ORDER BY created_at DESC"
-        ).fetchall()
+        cur.execute("SELECT * FROM line_inquiries ORDER BY created_at DESC")
     else:
-        # 無論篩選條件，always 包含 sender='staff' 的我方回覆
-        rows = c.execute(
-            "SELECT * FROM line_inquiries WHERE status=? OR sender='staff' "
+        cur.execute(
+            "SELECT * FROM line_inquiries WHERE status=%s OR sender='staff' "
             "ORDER BY created_at DESC",
             (status,),
-        ).fetchall()
-    c.close()
+        )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
     return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/inquiries/<int:inquiry_id>", methods=["PATCH"])
 def update_inquiry(inquiry_id: int):
     _auth()
-    data = request.json or {}
+    data   = request.json or {}
     fields = ["status", "inquiry_type", "trello_card_id",
               "company_name", "tax_id", "contact_name", "mobile",
               "phone", "fax", "address", "email", "inquiry_product", "area"]
-    sets   = ", ".join(f"{f} = COALESCE(?, {f})" for f in fields)
-    values = [data.get(f) for f in fields] + [inquiry_id]
-    c = _conn()
-    c.execute(
-        f"UPDATE line_inquiries SET {sets}, updated_at=datetime('now','+8 hours') WHERE id=?",
+    sets   = ", ".join(f"{f} = COALESCE(%s, {f})" for f in fields)
+    values = [data.get(f) for f in fields] + [_now_tw(), inquiry_id]
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute(
+        f"UPDATE line_inquiries SET {sets}, updated_at=%s WHERE id=%s",
         values,
     )
-    c.commit()
-    c.close()
+    conn.commit()
+    cur.close()
+    conn.close()
     return jsonify({"ok": True})
 
 
 @app.route("/api/push_message", methods=["POST"])
 def push_message():
-    """發送 LINE Push Message 給顧客，並將訊息存入 DB。"""
     _auth()
     data    = request.json or {}
     to      = data.get("to", "").strip()
@@ -363,28 +379,29 @@ def push_message():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-    c = _conn()
-    cur = c.execute("""
+    now  = _now_tw()
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute("""
         INSERT INTO line_inquiries
             (line_user_id, display_name, message, sender, status,
              inquiry_type, created_at, updated_at)
-        VALUES (?, '我方', ?, 'staff', '已忽略', '',
-                datetime('now','+8 hours'), datetime('now','+8 hours'))
-    """, (to, message))
-    c.commit()
-    row_id = cur.lastrowid
-    row = dict(c.execute(
-        "SELECT * FROM line_inquiries WHERE id=?", (row_id,)
-    ).fetchone())
-    c.close()
+        VALUES (%s, '我方', %s, 'staff', '已忽略', '', %s, %s)
+        RETURNING id
+    """, (to, message, now, now))
+    row_id = cur.fetchone()["id"]
+    conn.commit()
+    cur.execute("SELECT * FROM line_inquiries WHERE id=%s", (row_id,))
+    row = dict(cur.fetchone())
+    cur.close()
+    conn.close()
     return jsonify({"ok": True, "record": row})
 
 
 @app.route("/api/extract_text", methods=["POST"])
 def extract_text():
-    """接收合併訊息文字，呼叫 Gemini 辨識並回傳結構化欄位。"""
     _auth()
-    data = request.json or {}
+    data    = request.json or {}
     message = data.get("message", "").strip()
     if not message:
         return jsonify(_EMPTY_INFO)

@@ -431,7 +431,6 @@ class _LineTab:
                 conn.close()
 
             msgs = [dict(r) for r in rows]
-            # 找顧客名稱（排除我方訊息）
             customer_msgs = [m for m in msgs if m.get("sender") != "staff"]
             name = customer_msgs[0]["display_name"] if customer_msgs else "未知顧客"
             thread_name_lbl.configure(text=name, fg="#111111")
@@ -615,7 +614,8 @@ class _LineTab:
                     ).fetchall()
                 else:
                     rows = conn.execute(
-                        "SELECT * FROM line_inquiries WHERE status=? ORDER BY created_at DESC",
+                        "SELECT * FROM line_inquiries WHERE status=? "
+                        "ORDER BY created_at DESC",
                         (status_filter,)
                     ).fetchall()
                 return [dict(r) for r in rows]

@@ -328,6 +328,10 @@ class _TrelloTab:
                     def _done(n=added):
                         token_status.configure(text="✔  已授權（gsheets_token.json 存在）", text_color=GREEN)
                         out_label.configure(text=f"✔  同步完成，新增 {n} 筆資料", text_color=GREEN)
+                        if messagebox.askyesno("完成", f"新增 {n} 筆資料\n\n是否立即開啟出貨一覽表？", parent=parent):
+                            import webbrowser
+                            from sync.syncer_sheets import _SPREADSHEET_ID, _SHEET_GID
+                            webbrowser.open(f"https://docs.google.com/spreadsheets/d/{_SPREADSHEET_ID}/edit#gid={_SHEET_GID}")
                     parent.after(0, _done)
                 except Exception as e:
                     from sync.syncer_sheets import _fmt_api_error
