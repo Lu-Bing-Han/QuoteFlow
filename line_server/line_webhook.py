@@ -98,6 +98,7 @@ def _init_db():
         ("email",           "TEXT DEFAULT ''"),
         ("inquiry_product", "TEXT DEFAULT ''"),
         ("area",            "TEXT DEFAULT ''"),
+        ("sender",          "TEXT DEFAULT 'customer'"),
     ]
     for col, typedef in new_cols:
         try:
