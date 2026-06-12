@@ -70,12 +70,40 @@ def _load_config():
         try:
             return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            from core.logger import get_logger
+            get_logger(__name__).warning("config.json 格式錯誤，使用預設值", exc_info=True)
     return {"operators": ["小皋"]}
 
 
 def _save_config(cfg):
     CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _validate_config(cfg: dict):
+    """啟動時驗證 config，有問題用 messagebox 警告（不阻止啟動）。"""
+    from core.logger import get_logger
+    log = get_logger(__name__)
+    warnings: list[str] = []
+
+    db_path = cfg.get("db_path", "")
+    if db_path and not Path(db_path).exists():
+        msg = f"設定的資料庫路徑不存在：\n{db_path}\n\n將使用本機預設路徑。"
+        warnings.append(msg)
+        log.warning("db_path 不存在: %s", db_path)
+
+    line_cfg = cfg.get("line_server", {})
+    if line_cfg.get("url") and not line_cfg.get("secret"):
+        msg = "LINE 伺服器已設定網址，但 API Secret 為空，同步將會失敗。"
+        warnings.append(msg)
+        log.warning("LINE server url 已設定但 secret 為空")
+
+    if not cfg.get("operators"):
+        msg = "尚未設定任何人員，請至 ⚙ 設定新增人員與代號。"
+        warnings.append(msg)
+        log.warning("operators 未設定")
+
+    if warnings:
+        messagebox.showwarning("設定警告", "\n\n".join(warnings))
 
 
 # ════════════════════════════════════════════════════════
@@ -131,8 +159,9 @@ class App(
         self._parsed_data = None
         self._src_path = None
         self._config = _load_config()
-        set_db_path(self._config.get("db_path"))   # 若有設定共用路徑則套用
-        init_db()       # 建立資料庫 / 資料表（已存在則略過）
+        set_db_path(self._config.get("db_path"))
+        init_db()
+        self.after(200, lambda: _validate_config(self._config))
         self._build_ui()
 
     # ════════════════════════════════════════════════════════

@@ -109,7 +109,7 @@ def init_db():
                     f"ALTER TABLE line_inquiries ADD COLUMN {col} {typedef}"
                 )
             except Exception:
-                pass
+                pass  # 欄位已存在屬正常，不需記錄
         conn.commit()
     finally:
         conn.close()

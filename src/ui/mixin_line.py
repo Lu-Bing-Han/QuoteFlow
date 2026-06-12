@@ -657,6 +657,7 @@ class _LineTab:
                                    inquiry_type: str = "", trello_card_id: str = "",
                                    extra: dict | None = None):
             import requests as _req
+            import logging
             url = _srv_url()
             if not url:
                 return
@@ -669,7 +670,10 @@ class _LineTab:
                 _req.patch(f"{url}/api/inquiries/{inquiry_id}",
                            json=payload, headers=_srv_headers(), timeout=8)
             except Exception:
-                pass
+                logging.getLogger(__name__).warning(
+                    "push_status_to_server 失敗 id=%s status=%s", inquiry_id, status,
+                    exc_info=True
+                )
 
         def _fetch_inquiries(status_filter: str) -> list[dict]:
             from core.db import get_connection
