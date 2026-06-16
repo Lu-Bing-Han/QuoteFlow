@@ -145,8 +145,22 @@ class _TrelloTab:
         token_status.pack(fill="x", padx=8, pady=(0, 6))
 
         # ── 卡片抓取列 ────────────────────────────────────
+        _BOARD_SOURCES = {
+            "物流事業部1 — 本周下單":  ("物流事業部1",  "本周下單"),
+            "維修保養部門 — 已下單":   ("維修保養部門", "已下單"),
+        }
+
         fetch_row = tk.Frame(parent, bg=BG)
         fetch_row.pack(fill="x", padx=12, pady=(6, 2))
+
+        ctk.CTkLabel(fetch_row, text="來源：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(0, 2))
+        source_var = tk.StringVar(value=list(_BOARD_SOURCES.keys())[0])
+        ctk.CTkOptionMenu(
+            fetch_row, variable=source_var,
+            values=list(_BOARD_SOURCES.keys()),
+            font=FONT_S, width=200, height=28, corner_radius=4,
+        ).pack(side="left", padx=(0, 12))
 
         fetch_status = ctk.CTkLabel(fetch_row, text="", fg_color="transparent",
                                      font=FONT_S, text_color=GRAY)
@@ -205,9 +219,11 @@ class _TrelloTab:
                 messagebox.showwarning("憑證未填", "請先填入並儲存 Trello 憑證", parent=parent); return
             fetch_status.configure(text="抓取中…", text_color=GRAY)
 
-            def _run():
+            board_name, list_name = _BOARD_SOURCES[source_var.get()]
+
+            def _run(bn=board_name, ln=list_name):
                 try:
-                    cards = fetch_po_cards(api_key, token)
+                    cards = fetch_po_cards(api_key, token, board_name=bn, list_name=ln)
                     update_location_cache(cards, _LOCATION_CACHE_PATH)
                     def _done(c=cards):
                         _all_cards.clear(); _all_cards.extend(c); _apply_days_filter()

@@ -75,6 +75,13 @@ pyinstaller QuoteFlow.spec
 | credentials.json | Google Sheets OAuth 憑證（自行放置）|
 | icon.png | 應用程式圖示 |
 
+## 文件
+
+| 文件 | 對象 |
+|------|------|
+| [docs/user_guide.md](docs/user_guide.md) | 日常使用的同事 — 各功能操作說明 |
+| [docs/ops.md](docs/ops.md) | 維運人員 — build、部署、Railway、DB 備份、回滾 |
+
 ## 功能說明
 
 | 頁籤 | 說明 |

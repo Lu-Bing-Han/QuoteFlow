@@ -17,7 +17,7 @@ def _auth(api_key: str, token: str) -> dict:
     return {"key": api_key, "token": token}
 
 
-def _get_board_id(api_key: str, token: str) -> str:
+def _get_board_id(api_key: str, token: str, board_name: str) -> str:
     resp = requests.get(
         f"{_API_BASE}/members/me/boards",
         params={**_auth(api_key, token), "fields": "name,id"},
@@ -25,12 +25,12 @@ def _get_board_id(api_key: str, token: str) -> str:
     )
     resp.raise_for_status()
     for b in resp.json():
-        if b["name"] == _BOARD_NAME:
+        if b["name"] == board_name:
             return b["id"]
-    raise ValueError(f"找不到看板「{_BOARD_NAME}」")
+    raise ValueError(f"找不到看板「{board_name}」")
 
 
-def _get_list_id(api_key: str, token: str, board_id: str) -> str:
+def _get_list_id(api_key: str, token: str, board_id: str, list_name: str) -> str:
     resp = requests.get(
         f"{_API_BASE}/boards/{board_id}/lists",
         params={**_auth(api_key, token), "fields": "name,id"},
@@ -38,9 +38,9 @@ def _get_list_id(api_key: str, token: str, board_id: str) -> str:
     )
     resp.raise_for_status()
     for lst in resp.json():
-        if _LIST_NAME in lst["name"]:
+        if list_name in lst["name"]:
             return lst["id"]
-    raise ValueError(f"找不到清單「{_LIST_NAME}」")
+    raise ValueError(f"找不到清單「{list_name}」")
 
 
 def _parse_desc(desc: str) -> dict:
@@ -157,10 +157,12 @@ def _parse_title(title: str) -> dict:
     return {"prefix": prefix, "company": company, "location": location, "product": product, "quantity": quantity}
 
 
-def fetch_po_cards(api_key: str, token: str) -> list[dict]:
-    """回傳本周下單清單的所有卡片（已解析欄位）。"""
-    board_id = _get_board_id(api_key, token)
-    list_id  = _get_list_id(api_key, token, board_id)
+def fetch_po_cards(api_key: str, token: str,
+                   board_name: str = _BOARD_NAME,
+                   list_name:  str = _LIST_NAME) -> list[dict]:
+    """回傳指定看板/清單的所有卡片（已解析欄位）。"""
+    board_id = _get_board_id(api_key, token, board_name)
+    list_id  = _get_list_id(api_key, token, board_id, list_name)
 
     resp = requests.get(
         f"{_API_BASE}/lists/{list_id}/cards",

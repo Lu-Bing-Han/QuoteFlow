@@ -1152,3 +1152,57 @@ def generate_quote_from_cart(
     if wb_ap:
         wb_ap.close()
     return out_path
+
+
+def generate_blank_quote(
+    customer: dict,
+    template_path: Path,
+    output_dir: Path,
+    quote_no: str,
+    quote_date: date,
+    operator: str = "",
+    card_title: str = "",
+) -> Path:
+    """生成空白報價單：填入客戶資料與單號日期，品項區保留模板空白列不動。"""
+    valid_date = quote_date + timedelta(days=15)
+
+    try:
+        wb = openpyxl.load_workbook(str(template_path))
+    except Exception as e:
+        if "xl/drawings" in str(e).lower() or "no item named" in str(e).lower():
+            wb = openpyxl.load_workbook(str(template_path), keep_links=False)
+        else:
+            raise
+    ws = wb.active
+
+    header_map = {
+        "客戶全名": customer.get("company", ""),
+        "電話":     customer.get("phone",   ""),
+        "傳真":     customer.get("fax",     ""),
+        "聯絡人":   customer.get("contact", ""),
+        "聯絡地址": customer.get("address", ""),
+        "統一編號": customer.get("tax_id",  ""),
+        "EMAIL":    customer.get("email",   ""),
+        "報價日期": quote_date.strftime("%Y/%m/%d"),
+        "有效日期": valid_date.strftime("%Y/%m/%d"),
+        "報價單號": quote_no,
+    }
+    for label_kw, value in header_map.items():
+        if value:
+            _fill_field(ws, _norm(label_kw), value)
+
+    if operator:
+        _fill_field(ws, _norm("製表人"), operator)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    company  = customer.get("company", "客戶")
+    contact  = customer.get("contact", "")
+    roc_date = f"{quote_date.year - 1911}{quote_date.month:02d}{quote_date.day:02d}"
+    _bm      = re.search(r'\s*\([^)]+\)', card_title) if card_title else None
+    _bracket = _bm.group(0) if _bm else ""
+    _raw     = f"報價單-{company}{_bracket} {contact}（空白）-{roc_date}"
+    safe     = re.sub(r'[\\/:*?"<>|]', "_", _raw).strip()
+    out_path = output_dir / f"{safe}.xlsx"
+    wb.save(str(out_path))
+    wb.close()
+    return out_path

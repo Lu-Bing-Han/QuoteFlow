@@ -243,7 +243,8 @@ def _fill_textbox(doc, first_char: str):
 
 
 def _generate_word_from_template(part_no: str, red_lines: list,
-                                 out_path: Path, customer: str = '') -> Path:
+                                 out_path: Path, customer: str = '',
+                                 accessories: dict | None = None) -> Path:
     """
     複製 template.docx，做三件事：
     1. 右下內框填入客戶名稱第一字（72pt，置中貼合）
@@ -316,28 +317,55 @@ def _generate_word_from_template(part_no: str, red_lines: list,
     dim_p.append(dim_r)
     ref_p.addnext(dim_p)
 
-    # ── ④-b 插入紅色「附配件 □電線/□充電器」在長寬高之後 ─────────
-    acc_p    = OxmlElement('w:p')
-    acc_r    = OxmlElement('w:r')
-    acc_rPr  = OxmlElement('w:rPr')
-    acc_clr  = OxmlElement('w:color')
-    acc_clr.set(qn('w:val'), 'C0392B')
-    acc_rPr.append(acc_clr)
-    acc_sz   = OxmlElement('w:sz')
-    acc_sz.set(qn('w:val'), '52')   # 26pt
-    acc_rPr.append(acc_sz)
-    acc_r.append(acc_rPr)
-    acc_t    = OxmlElement('w:t')
-    acc_t.text = '附配件 □電線/□充電器'
-    acc_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-    acc_r.append(acc_t)
-    acc_p.append(acc_r)
-    dim_p.addnext(acc_p)
+    # ── ④-b 依 accessories 動態插入附加行 ────────────────────────
+    _acc = accessories or {}
+
+    def _make_red_para(text: str) -> 'OxmlElement':
+        p   = OxmlElement('w:p')
+        r   = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+        clr = OxmlElement('w:color')
+        clr.set(qn('w:val'), 'C0392B')
+        rPr.append(clr)
+        sz = OxmlElement('w:sz')
+        sz.set(qn('w:val'), '52')   # 26pt
+        rPr.append(sz)
+        r.append(rPr)
+        t = OxmlElement('w:t')
+        t.text = text
+        t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        r.append(t)
+        p.append(r)
+        return p
+
+    last_p    = dim_p
+    extra_cnt = 0  # 額外插入的行數（長寬高之外）
+
+    acc_parts = []
+    if _acc.get("電線"):   acc_parts.append("□電線")
+    if _acc.get("充電器"): acc_parts.append("□充電器")
+    if acc_parts:
+        p = _make_red_para("附配件 " + "/".join(acc_parts))
+        last_p.addnext(p)
+        last_p = p
+        extra_cnt += 1
+
+    if _acc.get("把手拆折"):
+        p = _make_red_para("□把手拆折")
+        last_p.addnext(p)
+        last_p = p
+        extra_cnt += 1
+
+    if _acc.get("腳踏拆"):
+        p = _make_red_para("□腳踏拆")
+        last_p.addnext(p)
+        last_p = p
+        extra_cnt += 1
 
     # ── ⑤ 調整緩衝空行，讓「插入項目 + size-28 空行」維持 8 行 ──────
     # 緩衝區共 10 行：前 8 行 size-28（可調整）、後 2 行保留不動
-    # 插入了 1 行長寬高 + 1 行附配件 + N 行 ※，需從前 8 行移除 N+2 行
-    n_to_remove = min(len(red_lines) + 2, 8)
+    # 插入了 1 行長寬高 + extra_cnt 行 + N 行 ※，需從前 8 行移除 N+1+extra_cnt 行
+    n_to_remove = min(len(red_lines) + 1 + extra_cnt, 8)
 
     in_zone        = False
     buffer_empties = []
@@ -360,7 +388,8 @@ def _generate_word_from_template(part_no: str, red_lines: list,
 
 # ── 主函式 ───────────────────────────────────────────────────────────
 
-def generate_inspection(src_path: str, data: dict, output_dir: _Path | None = None):
+def generate_inspection(src_path: str, data: dict, output_dir: _Path | None = None,
+                        accessories: dict | None = None):
     """
     回傳 (excel_path, [word_path, ...]) tuple。
     """
@@ -574,7 +603,8 @@ def generate_inspection(src_path: str, data: dict, output_dir: _Path | None = No
                 date_tag  = datetime.today().strftime("%Y%m%d")
                 word_out  = _out / f"{customer}{safe_part}改造紀錄單-{date_tag}.docx"
                 _generate_word_from_template(part_no, red_lines, word_out,
-                                             customer=customer)
+                                             customer=customer,
+                                             accessories=accessories)
                 word_paths.append(word_out)
         except Exception as e:
             print(f"[警告] Word 檔生成失敗：{e}")

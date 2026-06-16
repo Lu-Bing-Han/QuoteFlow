@@ -73,6 +73,7 @@ class _QuoteTab:
         _customer:       dict            = {}
         _cart:           dict            = {}
         _cur_cat:        list[str]       = ["all"]
+        _step:           list[int]       = [1]
         _products: list[dict] = load_product_catalog(TEMPLATE_DIR)
         CATS = ["全部"] + sorted({p["category"] for p in _products})
 
@@ -209,7 +210,8 @@ class _QuoteTab:
                 cart_sub_lbl.configure(text="小計：—")
                 cart_tax_lbl.configure(text="營業稅 5%：—")
                 cart_tot_lbl.configure(text="合計：—")
-                checkout_btn.configure(state="disabled")
+                checkout_btn.configure(
+                    state="normal" if quote_type_var.get() == "空白報價單" else "disabled")
                 return
             total_qty = sum(v["qty"] for _, v in items)
             cart_cnt_lbl.configure(text=f"{total_qty} 項")
@@ -246,11 +248,14 @@ class _QuoteTab:
                           relief="flat", bg="#dee2e6", fg="#333").pack(side="left")
                 tk.Label(ctrl, text="  ￥", bg=BG, fg=GRAY, font=FONT_S
                          ).pack(side="left")
-                pv = tk.StringVar(value=str(int(item["price"])))
+                pv      = tk.StringVar(value=str(int(item["price"])))
+                sub_var = tk.StringVar(value=f"= {_fmt(item['qty'] * item['price'])}")
 
-                def _price_changed(pvar=pv, c=code, *_):
+                def _price_changed(*_, pvar=pv, c=code, sv=sub_var):
                     try:
-                        _cart[c]["price"] = float(pvar.get().replace(",", ""))
+                        price = float(pvar.get().replace(",", ""))
+                        _cart[c]["price"] = price
+                        sv.set(f"= {_fmt(_cart[c]['qty'] * price)}")
                     except ValueError:
                         pass
                     _update_cart_totals()
@@ -258,8 +263,7 @@ class _QuoteTab:
                 pv.trace_add("write", _price_changed)
                 tk.Entry(ctrl, textvariable=pv, width=7, font=FONT_S
                          ).pack(side="left")
-                sub = item["qty"] * item["price"]
-                tk.Label(if_f, text=f"= {_fmt(sub)}", bg=BG, fg=GRAY,
+                tk.Label(if_f, textvariable=sub_var, bg=BG, fg=GRAY,
                          font=FONT_S, anchor="e").pack(fill="x")
             _rebind_cart_scroll()
             _update_cart_totals()
@@ -278,7 +282,10 @@ class _QuoteTab:
             cart_sub_lbl.configure(text=f"小計：{_fmt(sub)}" + (f" + 運費 {_fmt(freight)}" if freight else ""))
             cart_tax_lbl.configure(text=f"營業稅 5%：{_fmt(tax)}")
             cart_tot_lbl.configure(text=f"合計：{_fmt(tot)}")
-            checkout_btn.configure(state="normal" if items else "disabled")
+            checkout_btn.configure(
+                state="normal" if (items or quote_type_var.get() == "空白報價單") else "disabled")
+            if _step[0] == 3:
+                _build_confirm()
 
         # ════════════════════════════════════════════════════
         # Step Bar
@@ -478,11 +485,12 @@ class _QuoteTab:
         cfg_row2.pack(fill="x", padx=6, pady=(2, 6))
         ctk.CTkLabel(cfg_row2, text="報價單類型：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).pack(side="left")
-        _QUOTE_TYPE_OPTIONS = ["一般報價單", "補助報價單", "對比報價單"]
+        _QUOTE_TYPE_OPTIONS = ["一般報價單", "補助報價單", "對比報價單", "空白報價單"]
         quote_type_var = tk.StringVar(value=_QUOTE_TYPE_OPTIONS[0])
         ctk.CTkComboBox(cfg_row2, variable=quote_type_var,
                          values=_QUOTE_TYPE_OPTIONS,
                          font=FONT_S, width=120, height=28).pack(side="left", padx=(0, 6))
+        quote_type_var.trace_add("write", lambda *_: _render_cart())
 
         def _update_valid_label(*_):
             try:
@@ -692,6 +700,7 @@ class _QuoteTab:
             cat = _cur_cat[0]
             filtered = [p for p in _products
                         if cat == "全部" or p.get("category") == cat]
+            _pending_imgs: list[tuple] = []   # (code, category, img_lbl, card_bg)
             for idx, prod in enumerate(filtered):
                 col   = idx % 2
                 row_i = idx // 2
@@ -706,11 +715,20 @@ class _QuoteTab:
 
                 child_widgets = []
 
-                _ph = _load_prod_photo(code, prod.get("category", ""))
-                if _ph:
-                    img_lbl = tk.Label(inner_f, image=_ph, bg=card_bg)
-                    img_lbl.pack(pady=(6, 2))
-                    child_widgets.append(img_lbl)
+                # 先放空白佔位 label；圖片事後非同步填入
+                img_lbl = tk.Label(inner_f, image=None, bg=card_bg)
+                img_lbl.pack(pady=(6, 2))
+                child_widgets.append(img_lbl)
+                cat_name = prod.get("category", "")
+                if code in _img_cache:
+                    # 已快取：直接設定
+                    ph = _img_cache[code]
+                    if ph:
+                        img_lbl.configure(image=ph)
+                    else:
+                        img_lbl.pack_forget()
+                else:
+                    _pending_imgs.append((code, cat_name, img_lbl))
 
                 for txt, fg, fnt, pkw in [
                     (code,                    GRAY,     MONO,                    dict(fill="x", padx=8, pady=(6, 0))),
@@ -751,6 +769,21 @@ class _QuoteTab:
 
             _bind_scroll(prod_inner, _prod_scroll)
 
+            # 圖片逐張非同步載入，不阻塞 UI
+            def _lazy_load(items, i=0):
+                if i >= len(items):
+                    return
+                code, cat_name, lbl = items[i]
+                if lbl.winfo_exists():
+                    ph = _load_prod_photo(code, cat_name)
+                    if ph:
+                        lbl.configure(image=ph)
+                    else:
+                        lbl.pack_forget()
+                parent.after(0, _lazy_load, items, i + 1)
+            if _pending_imgs:
+                parent.after(0, _lazy_load, _pending_imgs)
+
         prod_cvs.bind("<MouseWheel>", _prod_scroll)
 
         if CATS:
@@ -758,7 +791,7 @@ class _QuoteTab:
             for c, b in _cat_btns.items():
                 b.config(bg=BLUE if c == CATS[0] else "#dee2e6",
                          fg="white" if c == CATS[0] else "#333")
-        _render_products()
+        parent.after(0, _render_products)
 
         p2_back_btn = ctk.CTkButton(p2_footer, text="← 返回顧客資料",
                                      command=lambda: _go_step(1),
@@ -1038,11 +1071,35 @@ class _QuoteTab:
             _refresh_history_panel(items)
 
         def _generate():
-            from core.generator_quote import generate_quote_from_cart
-            if not _cart:
-                messagebox.showwarning("購物車空白", "請先選取品項", parent=parent); return
+            from core.generator_quote import generate_quote_from_cart, generate_blank_quote
             if not _customer.get("company"):
                 messagebox.showwarning("無客戶資料", "請先在步驟①選取 Trello 卡片", parent=parent); return
+
+            if quote_type_var.get() == "空白報價單":
+                tpl_path = TEMPLATE_DIR / "template_quote - vacancy.xlsx"
+                if not tpl_path.exists():
+                    messagebox.showerror("找不到範本", f"找不到 {tpl_path}", parent=parent); return
+                q_date   = date_entry.get_date()
+                quote_no = quote_no_var.get().strip()
+                out_dir  = self._get_path("output_quote")
+                p3_out_lbl.configure(text="生成中…", fg=GRAY)
+                parent.update_idletasks()
+                try:
+                    out_path = generate_blank_quote(
+                        _customer, tpl_path, out_dir, quote_no, q_date,
+                        operator=op_var.get().strip(),
+                        card_title=_card[0].get("name", "") if _card[0] else "")
+                    p3_out_lbl.configure(text=f"✔  已生成：{out_path}", fg=GREEN)
+                    if messagebox.askyesno("完成",
+                            f"空白報價單已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
+                        os.startfile(str(out_path))
+                except Exception as e:
+                    p3_out_lbl.configure(text=f"✘  {e}", fg="#c0392b")
+                    messagebox.showerror("生成失敗", str(e), parent=parent)
+                return
+
+            if not _cart:
+                messagebox.showwarning("購物車空白", "請先選取品項", parent=parent); return
             from core.generator_quote import (
                 QUOTE_TYPE_REGULAR, QUOTE_TYPE_ALLOWANCE, QUOTE_TYPE_COMPARE)
             _type_map = {
@@ -1152,6 +1209,7 @@ class _QuoteTab:
         _panels = {1: p1, 2: p2, 3: p3}
 
         def _go_step(n: int):
+            _step[0] = n
             for i, btn in enumerate(_step_btns, 1):
                 if i == n:
                     btn.configure(fg_color=BLUE, text_color="white")

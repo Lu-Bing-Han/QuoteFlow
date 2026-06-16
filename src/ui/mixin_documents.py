@@ -142,6 +142,55 @@ class _DocumentsTab:
                       fg_color="transparent", font=FONT, text_color=GRAY
                       ).pack(padx=12, pady=8, anchor="w")
 
+        # ── 附加選項 ────────────────────────────────────────
+        opts_outer, opts = _mk_lf(parent, "附加選項（Word）", BG, FONTB)
+        opts_outer.pack(fill="x", padx=12, pady=4)
+
+        self._insp_vars = {}
+        preview_var = tk.StringVar(value="（未勾選）")
+
+        def _update_preview(*_):
+            lines = []
+            acc = []
+            if self._insp_vars["電線"].get():   acc.append("□電線")
+            if self._insp_vars["充電器"].get(): acc.append("□充電器")
+            if acc:
+                lines.append("附配件 " + "/".join(acc))
+            if self._insp_vars["把手拆折"].get():
+                lines.append("□把手拆折")
+            if self._insp_vars["腳踏拆"].get():
+                lines.append("□腳踏拆")
+            preview_var.set("\n".join(lines) if lines else "（未勾選）")
+
+        row0 = ctk.CTkFrame(opts, fg_color="transparent")
+        row0.pack(anchor="w", padx=8, pady=(4, 2))
+        for key, label in [("把手拆折", "□把手拆折"), ("腳踏拆", "□腳踏拆")]:
+            var = tk.BooleanVar()
+            self._insp_vars[key] = var
+            ctk.CTkCheckBox(row0, text=label, variable=var, command=_update_preview,
+                             font=FONT, text_color="#2c3e50",
+                             checkbox_width=18, checkbox_height=18
+                             ).pack(side="left", padx=12)
+
+        row1 = ctk.CTkFrame(opts, fg_color="transparent")
+        row1.pack(anchor="w", padx=8, pady=(2, 4))
+        ctk.CTkLabel(row1, text="附配件：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(12, 4))
+        for key, label in [("電線", "電線"), ("充電器", "充電器")]:
+            var = tk.BooleanVar()
+            self._insp_vars[key] = var
+            ctk.CTkCheckBox(row1, text=label, variable=var, command=_update_preview,
+                             font=FONT, text_color="#2c3e50",
+                             checkbox_width=18, checkbox_height=18
+                             ).pack(side="left", padx=8)
+
+        # ── Word 預覽 ────────────────────────────────────────
+        prev_outer, prev = _mk_lf(parent, "Word 預覽", BG, FONTB)
+        prev_outer.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(prev, textvariable=preview_var, fg_color="transparent",
+                      font=FONT_S, text_color="#6c3483", anchor="w", justify="left"
+                      ).pack(padx=12, pady=6, anchor="w")
+
         pf = ctk.CTkFrame(parent, fg_color="#e8ecf0", corner_radius=6)
         pf.pack(fill="x", padx=12, pady=4)
         ctk.CTkLabel(pf, text="輸出路徑：", fg_color="transparent",
@@ -455,10 +504,12 @@ class _DocumentsTab:
         if not self._parsed_data or not self._src_path:
             messagebox.showwarning("尚未載入", "請先選擇並載入報價單")
             return
+        accessories = {k: v.get() for k, v in getattr(self, "_insp_vars", {}).items()}
         try:
             excel_path, word_paths = generate_inspection(
                 self._src_path, self._parsed_data,
-                output_dir=self._get_path("output_inspection"))
+                output_dir=self._get_path("output_inspection"),
+                accessories=accessories)
             msg = f"驗機單 Excel 已儲存至：\n{excel_path}"
             if word_paths:
                 msg += f"\n\n驗機單 Word（共 {len(word_paths)} 份）："
