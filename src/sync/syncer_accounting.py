@@ -7,7 +7,11 @@ from pathlib import Path
 
 _API_BASE   = "https://api.trello.com/1"
 _BOARD_NAME = "物流事業部1"
-_SRC_LIST   = "已出貨尚未付款"
+_SRC_LISTS  = [
+    "已出貨尚未付款",
+    "3.1. 待匯尾款/待確認交期(Processing)",
+    "3.2. 已匯款待出貨(Wait for shipping)",
+]
 _DST_LIST   = "會計對帳完成"
 
 _SKIP_WORDS = {"轉帳存", "跨電匯", "媒體轉", "ATM轉", "FXML轉", "電匯", "匯款", "帳存"}
@@ -41,6 +45,27 @@ def _find_list_id(api_key: str, token: str, board_id: str, name_contains: str) -
         if name_contains in lst["name"]:
             return lst["id"]
     raise ValueError(f"找不到包含「{name_contains}」的 Trello 清單")
+
+
+def _find_list_ids(api_key: str, token: str, board_id: str,
+                   names_contains: list[str]) -> list[str]:
+    """依序找出多個清單的 id；找不到的清單會被忽略（不中斷整體流程）。"""
+    resp = requests.get(
+        f"{_API_BASE}/boards/{board_id}/lists",
+        params={**_auth(api_key, token), "fields": "name,id"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    lists = resp.json()
+    ids = []
+    for name_contains in names_contains:
+        for lst in lists:
+            if name_contains in lst["name"]:
+                ids.append(lst["id"])
+                break
+    if not ids:
+        raise ValueError(f"找不到任何指定的 Trello 清單：{', '.join(names_contains)}")
+    return ids
 
 
 def parse_payment_row(text: str) -> dict:
@@ -225,9 +250,9 @@ def _match_payment(payment: dict, cards: list[dict]) -> dict | None:
     if not company:
         return None
 
-    # 嚴格比對：名稱 + 金額（容差 15 元）
+    # 嚴格比對：名稱 + 金額（容差 30 元）
     for card in cards:
-        if company in card["title"] and abs(card["amount"] - amount) < 15.0:
+        if company in card["title"] and abs(card["amount"] - amount) < 30.0:
             return card
 
     # 寬鬆比對：名稱符合，卡片金額未填
@@ -242,13 +267,15 @@ def preview_matches(payments: list[dict],
                     api_key: str,
                     token: str) -> dict:
     """
-    比對付款紀錄與 Trello 已出貨尚未付款清單，不執行移動。
+    比對付款紀錄與 Trello 多個來源清單（_SRC_LISTS），不執行移動。
     回傳 {"matched": [(payment, card)], "unmatched": [payment], "dst_id": str}
     """
     board_id     = _get_board_id(api_key, token)
-    src_id       = _find_list_id(api_key, token, board_id, _SRC_LIST)
+    src_ids      = _find_list_ids(api_key, token, board_id, _SRC_LISTS)
     dst_id       = _find_list_id(api_key, token, board_id, _DST_LIST)
-    trello_cards = _fetch_trello_cards(src_id, api_key, token)
+    trello_cards = []
+    for src_id in src_ids:
+        trello_cards.extend(_fetch_trello_cards(src_id, api_key, token))
 
     matched:   list[tuple] = []
     unmatched: list[dict]  = []

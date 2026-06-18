@@ -918,11 +918,26 @@ class _LineTab:
 
             threading.Thread(target=_do_send, daemon=True).start()
 
+        def _ensure_selected_target(msgs: list[dict]):
+            """若尚未點選任何訊息泡泡（_selected_id 為 0），自動挑該顧客最新一筆
+            待處理訊息（或最新顧客訊息）當操作目標，補上 _selected_id 並開啟按鈕，
+            否則「合併資料／重新辨識」填好的欄位會因為沒有對應的 inquiry_id 而
+            導致「建立卡片」按鈕點了沒反應。"""
+            if _selected_id[0]:
+                return
+            pending = [m for m in msgs
+                       if m.get("sender") != "staff" and m.get("status") == "待處理"]
+            target = pending[-1] if pending else next(
+                (m for m in reversed(msgs) if m.get("sender") != "staff"), None)
+            if target:
+                _show_detail(target)
+
         def _on_merge_fields():
             """從該顧客所有訊息的結構化欄位，取每欄第一個非空值填入表單。"""
             msgs = _get_all_user_msgs()
             if not msgs:
                 return
+            _ensure_selected_target(msgs)
             merged = {}
             for key in _STRUCT_KEYS:
                 for m in msgs:
@@ -940,6 +955,7 @@ class _LineTab:
             msgs = _get_all_user_msgs()
             if not msgs:
                 return
+            _ensure_selected_target(msgs)
             lines = []
             for m in msgs:
                 text = (m.get("message") or "").strip()
