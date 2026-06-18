@@ -3,10 +3,11 @@ app_core.py — 主應用程式類別 AppCore / App
 整合所有 mixin，包含 __init__、_build_ui、共用方法與導覽邏輯。
 """
 
-import json, os, sys
+import json, os, sys, threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
+from datetime import datetime
 from pathlib import Path
 
 ctk.set_appearance_mode("light")
@@ -132,6 +133,16 @@ class App(
         "download_cards_dir": r"Z:\出貨單\Quoteflow_output\下載卡片",
     }
 
+    # 頁籤 → 輸出路徑設定 key（無對應者代表該頁籤不產生本機檔案）
+    _PAGE_PATH_KEY = {
+        "shipping":   "output_shipping",
+        "quote":      "output_quote",
+        "inspection": "output_inspection",
+        "fix":        "output_shipping",
+        "tag":        "output_tag",
+        "label":      "output_label",
+    }
+
     def __init__(self):
         super().__init__()
         self.title("報價單轉單工具｜立善科技")
@@ -185,6 +196,71 @@ class App(
     def _OUT_TAG(self):        return self._get_path("output_tag")
 
     # ════════════════════════════════════════════════════════
+    #  狀態列：記錄最近一次生成 / 同步結果
+    # ════════════════════════════════════════════════════════
+    def _set_status(self, message: str, ok: bool = True):
+        ts    = datetime.now().strftime("%H:%M:%S")
+        icon  = "✔" if ok else "✘"
+        color = "#1e8449" if ok else "#c0392b"
+        self._status_result_lbl.configure(text=f"{icon}  {ts}  {message}", text_color=color)
+
+    # ════════════════════════════════════════════════════════
+    #  長時間作業共用 helper：背景執行緒 + 按鈕 disable + 狀態文字
+    # ════════════════════════════════════════════════════════
+    def _run_task(self, worker, *, buttons=None, status_label=None,
+                   loading_text="處理中…", success_text=None,
+                   on_success=None, on_error=None):
+        """
+        在背景執行緒執行 worker()（避免凍結主視窗）。
+        執行期間：buttons 全部 disabled，status_label（若提供）顯示 loading_text。
+        結束後：buttons 還原 normal（按鈕本身即是重試入口，使用者可再次點擊重試），
+        status_label 與底部固定狀態列（_set_status）一併顯示成功/失敗結果。
+        success_text 可為字串，或 callable(result) -> str。
+        on_error 預設彈出錯誤訊息；可由呼叫端覆寫自訂處理方式。
+        """
+        buttons = list(buttons or [])
+        for b in buttons:
+            b.configure(state="disabled")
+        if status_label is not None:
+            status_label.configure(text=loading_text, text_color="#5d6d7e")
+
+        def _run():
+            try:
+                result = worker()
+            except Exception as e:
+                def _fail(e=e):
+                    for b in buttons:
+                        b.configure(state="normal")
+                    msg = str(e)
+                    if status_label is not None:
+                        status_label.configure(text=f"✘  {msg}", text_color="#c0392b")
+                    self._set_status(msg, ok=False)
+                    if on_error:
+                        on_error(e)
+                    else:
+                        messagebox.showerror("執行失敗", msg)
+                self.after(0, _fail)
+            else:
+                def _ok(result=result):
+                    for b in buttons:
+                        b.configure(state="normal")
+                    text = success_text(result) if callable(success_text) else (success_text or "✔  完成")
+                    if status_label is not None:
+                        status_label.configure(text=text, text_color="#1e8449")
+                    self._set_status(text, ok=True)
+                    if on_success:
+                        on_success(result)
+                self.after(0, _ok)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _make_progress_reporter(self, status_label):
+        """回傳一個可在背景執行緒安全呼叫的 progress(text) 函式，更新 status_label。"""
+        def _progress(text, color="#5d6d7e"):
+            self.after(0, lambda: status_label.configure(text=text, text_color=color))
+        return _progress
+
+    # ════════════════════════════════════════════════════════
     #  UI 建構
     # ════════════════════════════════════════════════════════
     def _build_ui(self):
@@ -222,10 +298,33 @@ class App(
                       width=80, height=32, corner_radius=6
                       ).pack(side="right", padx=(0, 2), pady=8)
 
-        self._file_label = ctk.CTkLabel(self, text="⚠  尚未選擇報價單",
-                                        fg_color="transparent",
-                                        text_color="#c0392b", font=FONT, anchor="w")
-        self._file_label.pack(anchor="w", padx=16, pady=(3, 0))
+        # ── 固定狀態列（檔案 / 輸出路徑 / 最近動作結果）────────────
+        STATUS_FONT = ("Microsoft JhengHei UI", 9)
+        status_bar = ctk.CTkFrame(self, fg_color="#eef1f4", corner_radius=0,
+                                   height=26, border_width=1, border_color="#d0d7de")
+        status_bar.pack(side="bottom", fill="x")
+        status_bar.pack_propagate(False)
+
+        self._status_file_lbl = ctk.CTkLabel(status_bar, text="⚠  尚未選擇報價單",
+                                              fg_color="transparent",
+                                              text_color="#c0392b", font=STATUS_FONT, anchor="w")
+        self._status_file_lbl.pack(side="left", padx=(10, 8))
+
+        ctk.CTkFrame(status_bar, fg_color="#c7ccd1", width=1,
+                      corner_radius=0).pack(side="left", fill="y", pady=5)
+
+        self._status_path_lbl = ctk.CTkLabel(status_bar, text="輸出路徑：—",
+                                              fg_color="transparent",
+                                              text_color="#5d6d7e", font=STATUS_FONT, anchor="w")
+        self._status_path_lbl.pack(side="left", padx=8)
+
+        ctk.CTkFrame(status_bar, fg_color="#c7ccd1", width=1,
+                      corner_radius=0).pack(side="left", fill="y", pady=5)
+
+        self._status_result_lbl = ctk.CTkLabel(status_bar, text="尚無動作紀錄",
+                                                fg_color="transparent",
+                                                text_color="#5d6d7e", font=STATUS_FONT, anchor="e")
+        self._status_result_lbl.pack(side="right", padx=(8, 10))
 
         # ── 主體：側邊列 + 內容區 ────────────────────────────
         body = tk.Frame(self, bg=BG)
@@ -257,6 +356,12 @@ class App(
             self._pages[key].pack(fill="both", expand=True)
             self._nav_btns[key].configure(fg_color=NAV_ACTIVE)
             self._active_page = key
+
+            path_key = self._PAGE_PATH_KEY.get(key)
+            if path_key:
+                self._status_path_lbl.configure(text=f"輸出路徑：{self._get_path(path_key)}")
+            else:
+                self._status_path_lbl.configure(text="輸出路徑：—")
 
         self._show_page = _show
 
@@ -564,6 +669,7 @@ class App(
     #  開檔
     # ════════════════════════════════════════════════════════
     def _open_file(self):
+        from core.generator import _load_series_lookup
         path = filedialog.askopenfilename(
             title="選擇報價單",
             filetypes=[("Excel 檔案", "*.xlsx *.xls"), ("所有檔案", "*.*")])
@@ -573,16 +679,21 @@ class App(
         try:
             data = parse(path)
             self._parsed_data = data
-            self._file_label.configure(text=f"✔  已載入：{path}", text_color="#1e8449")
+            self._status_file_lbl.configure(text=f"✔  已載入：{path}", text_color="#1e8449")
             h = data["header"]
             for key, var in self._read_vars.items():
                 var.set(h.get(key, "") or "—")
             for row_id in self._tree.get_children():
                 self._tree.delete(row_id)
+            series_lookup = _load_series_lookup()
             for item in data["items"]:
+                part_no = item.get("part_no", "")
+                name    = series_lookup.get(str(part_no).strip(), part_no)
                 self._tree.insert("", "end", values=(
-                    item["seq"], item.get("part_no", ""),
-                    item["qty"], item["unit"], "", ""))
+                    item["seq"], name,
+                    item["qty"], item["unit"], "", "", part_no))
             self._fill_vars["sale_no"].set(h.get("quote_no", ""))
+            self._set_status(f"已載入報價單：{Path(path).name}", ok=True)
         except Exception as e:
             messagebox.showerror("讀取失敗", f"無法解析報價單：\n{e}")
+            self._set_status(f"讀取失敗：{e}", ok=False)

@@ -12,9 +12,47 @@ from openpyxl.cell import MergedCell
 
 from _paths import TEMPLATE_DIR, OUTPUT_DIR
 TEMPLATE_PATH = TEMPLATE_DIR / "template.xlsx"
+SERIES_PATH   = TEMPLATE_DIR / "template_series.xlsx"
 
 ITEM_ROW     = 10
 FOOTER_START = 11   # 附註列（insert 插入點，也是 footer 合併格的起始列）
+
+
+def _load_series_lookup() -> dict:
+    """掃描 template_series.xlsx 所有分頁，建立 品號(B欄) → 品名/規格(C欄) 對照表。"""
+    lookup = {}
+    if not SERIES_PATH.exists():
+        return lookup
+    wb = openpyxl.load_workbook(SERIES_PATH, data_only=True, read_only=True)
+    try:
+        for ws in wb.worksheets:
+            for code, name in ws.iter_rows(min_row=2, min_col=2, max_col=3, values_only=True):
+                if code and name:
+                    lookup[str(code).strip()] = str(name).strip()
+    finally:
+        wb.close()
+    return lookup
+
+
+def _resolve_item_names(items: list, lookup: dict) -> list:
+    """若品項名稱完全符合 template_series 的品號，替換為對照表中的完整品名。"""
+    resolved = []
+    for item in items:
+        key = str(item.get("name", "")).strip()
+        if key in lookup:
+            item = dict(item, name=lookup[key])
+        resolved.append(item)
+    return resolved
+
+
+def _codes_for_filename(items: list) -> str:
+    """取各品項的品號（簡寫），去重後串接，供檔名使用。"""
+    codes = []
+    for item in items:
+        code = str(item.get("part_no", "")).strip()
+        if code and code not in codes:
+            codes.append(code)
+    return "+".join(codes)
 
 
 def _format_date(s):
@@ -126,7 +164,7 @@ def _append_invoice_to_footer(ws, invoice_choice):
 
 def generate(data, extra, out_filename="", output_dir=None):
     out_dir = Path(output_dir) if output_dir else OUTPUT_DIR
-    items = data["items"]
+    items = _resolve_item_names(data["items"], _load_series_lookup())
     n     = len(items)
 
     # 超過 3 個品項：每 3 個一份，依序遞迴生成
@@ -134,12 +172,15 @@ def generate(data, extra, out_filename="", output_dir=None):
         h        = data["header"]
         customer = h.get("customer", "客戶")
         date_tag = extra.get("ship_date", "").replace("/", "") or datetime.today().strftime("%Y%m%d")
-        base     = out_filename or f"出貨單-{customer}-{date_tag}.xlsx"
-        stem     = Path(base).stem
         chunks   = [items[i:i+3] for i in range(0, n, 3)]
         paths    = []
         for idx, chunk in enumerate(chunks):
-            fn = base if idx == 0 else f"{stem}-{idx + 1}.xlsx"
+            if out_filename:
+                stem = Path(out_filename).stem
+                fn = out_filename if idx == 0 else f"{stem}-{idx + 1}.xlsx"
+            else:
+                suffix = f"-{idx + 1}" if idx > 0 else ""
+                fn = f"出貨單-{customer}{_codes_for_filename(chunk)}-{date_tag}{suffix}.xlsx"
             paths.append(generate(dict(data, items=chunk), extra, fn, output_dir=output_dir))
         return paths
 
@@ -208,7 +249,7 @@ def generate(data, extra, out_filename="", output_dir=None):
     if not out_filename:
         customer = h.get("customer", "客戶")
         date_tag = extra.get("ship_date", "").replace("/", "") or datetime.today().strftime("%Y%m%d")
-        out_filename = f"出貨單-{customer}-{date_tag}.xlsx"
+        out_filename = f"出貨單-{customer}{_codes_for_filename(items)}-{date_tag}.xlsx"
 
     out_path = out_dir / out_filename
     wb.save(out_path)

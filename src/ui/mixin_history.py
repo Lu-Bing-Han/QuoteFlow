@@ -2,7 +2,7 @@
 mixin_history.py — 報價記錄查詢頁籤
 """
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import customtkinter as ctk
 from ui.app_core import _mk_lf
 
@@ -98,6 +98,11 @@ class _HistoryTab:
         result_outer, result_lf = _mk_lf(parent, "搜尋結果", BG, FONTB)
         result_outer.pack(fill="both", expand=True, padx=12, pady=(0, 6))
 
+        ctk.CTkLabel(result_lf, text="💡  雙擊列、右鍵點選，或選取列後按「🔍 查看明細」可查看完整報價單內容",
+                      fg_color="transparent", font=FONT_S,
+                      text_color="#d68910", anchor="w"
+                      ).pack(fill="x", padx=4, pady=(2, 4))
+
         cols = ("quote_no", "date", "customer", "contact", "total")
         tree = ttk.Treeview(result_lf, columns=cols, show="headings",
                              selectmode="browse")
@@ -117,9 +122,29 @@ class _HistoryTab:
         sb.pack(side="right", fill="y")
         tree.pack(fill="both", expand=True, padx=4, pady=4)
 
-        count_lbl = ctk.CTkLabel(parent, text="", fg_color="transparent",
+        bottom_row = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=0)
+        bottom_row.pack(fill="x", padx=14, pady=(0, 6))
+
+        count_lbl = ctk.CTkLabel(bottom_row, text="", fg_color="transparent",
                                   font=FONT_S, text_color=GRAY, anchor="w")
-        count_lbl.pack(anchor="w", padx=14)
+        count_lbl.pack(side="left")
+
+        def _selected_quote_id():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showinfo("尚未選取", "請先在表格中點選一列，再按「🔍 查看明細」")
+                return None
+            return int(tree.item(sel[0])["tags"][0])
+
+        def _view_selected():
+            quote_id = _selected_quote_id()
+            if quote_id is not None:
+                _show_detail(quote_id)
+
+        ctk.CTkButton(bottom_row, text="🔍  查看明細", command=_view_selected,
+                       fg_color="#1a5276", hover_color="#154360", text_color="white",
+                       font=FONT_S, width=110, height=28, corner_radius=4
+                       ).pack(side="right")
 
         def _on_dclick(event):
             sel = tree.selection()
@@ -128,7 +153,19 @@ class _HistoryTab:
             quote_id = tree.item(sel[0])["tags"][0]
             _show_detail(int(quote_id))
 
+        def _on_rclick(event):
+            row_id = tree.identify_row(event.y)
+            if not row_id:
+                return
+            tree.selection_set(row_id)
+            quote_id = tree.item(row_id)["tags"][0]
+            menu = tk.Menu(parent, tearoff=0)
+            menu.add_command(label="🔍  查看明細",
+                              command=lambda: _show_detail(int(quote_id)))
+            menu.tk_popup(event.x_root, event.y_root)
+
         tree.bind("<Double-1>", _on_dclick)
+        tree.bind("<Button-3>", _on_rclick)
 
         # ════════════════════════════════════════════════
         #  搜尋邏輯

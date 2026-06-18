@@ -27,6 +27,10 @@ class _DocumentsTab:
                        fg_color="#c0392b", hover_color="#a93226", text_color="white",
                        font=FONT, width=90, height=34, corner_radius=6
                        ).pack(side="left")
+        ctk.CTkButton(bb, text="✏ 編輯所選列", command=self._edit_selected_row,
+                       fg_color="#d68910", hover_color="#b7770d", text_color="white",
+                       font=FONT, width=110, height=34, corner_radius=6
+                       ).pack(side="left", padx=(6, 0))
         ctk.CTkButton(bb, text="⬇  生成出貨單", command=self._generate,
                        fg_color="#1a5276", hover_color="#154360", text_color="white",
                        font=("Microsoft JhengHei UI", 11, "bold"),
@@ -110,25 +114,35 @@ class _DocumentsTab:
                                 ).pack(side="left", padx=(0, 8))
 
         # 品項列表
-        tf_outer, tf = _mk_lf(parent, "品項列表（雙擊儲存格可編輯）", BG, FONTB)
+        tf_outer, tf = _mk_lf(parent, "品項列表", BG, FONTB)
         tf_outer.pack(fill="both", expand=True, padx=12, pady=4)
 
-        cols     = ("seq", "name", "qty", "unit", "unit_price", "subtotal")
-        col_lbls = ("序號", "品名 / 規格", "數量", "單位", "單價", "小計")
-        col_ws   = (45, 330, 65, 65, 85, 85)
+        ctk.CTkLabel(tf, text="💡  雙擊儲存格、右鍵點選，或選取列後按下方「✏ 編輯所選列」即可編輯",
+                      fg_color="transparent", font=("Microsoft JhengHei UI", 9),
+                      text_color="#d68910", anchor="w"
+                      ).pack(fill="x", padx=4, pady=(2, 4))
 
-        self._tree = ttk.Treeview(tf, columns=cols, show="headings",
+        tree_area = ctk.CTkFrame(tf, fg_color="transparent", corner_radius=0)
+        tree_area.pack(fill="both", expand=True)
+
+        cols     = ("seq", "name", "qty", "unit", "unit_price", "subtotal", "part_no")
+        col_lbls = ("序號", "品名 / 規格", "數量", "單位", "單價", "小計", "品號")
+        col_ws   = (45, 330, 65, 65, 85, 85, 0)
+
+        self._tree = ttk.Treeview(tree_area, columns=cols, show="headings",
                                    selectmode="browse", height=8)
+        self._tree["displaycolumns"] = cols[:-1]   # part_no 僅供內部使用，不顯示
         for col, lbl, w in zip(cols, col_lbls, col_ws):
             self._tree.heading(col, text=lbl)
             self._tree.column(col, width=w, minwidth=w, anchor="center")
         self._tree.column("name", anchor="w")
 
-        vsb = ttk.Scrollbar(tf, orient="vertical", command=self._tree.yview)
+        vsb = ttk.Scrollbar(tree_area, orient="vertical", command=self._tree.yview)
         self._tree.configure(yscrollcommand=vsb.set)
         self._tree.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
         self._tree.bind("<Double-1>", self._on_cell_dclick)
+        self._tree.bind("<Button-3>", self._on_cell_rclick)
 
     # ── Tab 2：驗機單 ─────────────────────────────────────────
     def _build_tab_inspection(self, parent, PAD, FONT, FONTB, BG):
@@ -351,6 +365,22 @@ class _DocumentsTab:
         col_id  = self._tree.identify_column(event.x)
         if not item_id or not col_id:
             return
+        self._open_cell_editor(item_id, col_id)
+
+    def _on_cell_rclick(self, event):
+        item_id = self._tree.identify_row(event.y)
+        col_id  = self._tree.identify_column(event.x)
+        if not item_id or not col_id:
+            return
+        self._tree.selection_set(item_id)
+        col_idx  = int(col_id.replace("#", "")) - 1
+        col_disp = ("序號", "品名", "數量", "單位", "單價", "小計")
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label=f"✏  編輯「{col_disp[col_idx]}」",
+                          command=lambda: self._open_cell_editor(item_id, col_id))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _open_cell_editor(self, item_id, col_id):
         col_idx  = int(col_id.replace("#", "")) - 1
         col_keys = ("seq", "name", "qty", "unit", "unit_price", "subtotal")
         col_disp = ("序號", "品名", "數量", "單位", "單價", "小計")
@@ -399,9 +429,16 @@ class _DocumentsTab:
                        font=("Microsoft JhengHei UI", 10),
                        width=80, height=28, corner_radius=4).pack(pady=2)
 
+    def _edit_selected_row(self):
+        sel = self._tree.selection()
+        if not sel:
+            messagebox.showinfo("尚未選取", "請先在表格中點選一列，再按「✏ 編輯所選列」")
+            return
+        self._open_cell_editor(sel[0], "#2")   # 預設開啟「品名 / 規格」欄
+
     def _add_row(self):
         n = len(self._tree.get_children()) + 1
-        self._tree.insert("", "end", values=(n, "新品項", 1, "組", 0, 0))
+        self._tree.insert("", "end", values=(n, "新品項", 1, "組", 0, 0, ""))
 
     def _del_row(self):
         sel = self._tree.selection()
@@ -478,7 +515,8 @@ class _DocumentsTab:
             items.append({"seq": i+1, "name": v[1],
                           "qty": self._to_num(v[2]), "unit": v[3],
                           "unit_price": self._to_num(v[4]),
-                          "subtotal":   self._to_num(v[5])})
+                          "subtotal":   self._to_num(v[5]),
+                          "part_no":    v[6] if len(v) > 6 else ""})
         self._parsed_data["items"] = items
         self._sync_header()
         extra = {
@@ -492,11 +530,13 @@ class _DocumentsTab:
             result = generate(self._parsed_data, extra, output_dir=self._OUT_SHIPPING)
             paths  = result if isinstance(result, list) else [result]
             msg    = "\n".join(str(p) for p in paths)
+            self._set_status(f"出貨單已生成（{len(paths)} 份）", ok=True)
             if messagebox.askyesno("生成成功",
                     f"已生成 {len(paths)} 份出貨單：\n{msg}\n\n是否立即開啟？"):
                 for p in paths:
                     os.startfile(p) if sys.platform == "win32" else subprocess.run(["open", str(p)])
         except Exception as e:
+            self._set_status(f"出貨單生成失敗：{e}", ok=False)
             messagebox.showerror("生成失敗", str(e))
 
     def _generate_inspection(self):
@@ -515,11 +555,13 @@ class _DocumentsTab:
                 msg += f"\n\n驗機單 Word（共 {len(word_paths)} 份）："
                 for wp in word_paths:
                     msg += f"\n  {wp.name}"
+            self._set_status("驗機單已生成", ok=True)
             if messagebox.askyesno("生成成功", msg + "\n\n是否立即開啟？"):
                 os.startfile(excel_path)
                 for wp in word_paths:
                     os.startfile(wp)
         except Exception as e:
+            self._set_status(f"驗機單生成失敗：{e}", ok=False)
             messagebox.showerror("生成失敗", str(e))
 
     def _generate_fix(self):
@@ -547,11 +589,13 @@ class _DocumentsTab:
             result = generate_fix(self._parsed_data, extra, output_dir=self._OUT_SHIPPING)
             paths  = result if isinstance(result, list) else [result]
             msg = "\n".join(str(p) for p in paths)
+            self._set_status(f"維修單已生成（{len(paths)} 份）", ok=True)
             if messagebox.askyesno("生成成功",
                     f"已生成 {len(paths)} 份檔案：\n{msg}\n\n是否立即開啟？"):
                 for p in paths:
                     os.startfile(p) if sys.platform == "win32" else subprocess.run(["open", str(p)])
         except Exception as e:
+            self._set_status(f"維修單生成失敗：{e}", ok=False)
             messagebox.showerror("生成失敗", str(e))
 
     def _generate_tag_doc(self):
@@ -571,8 +615,10 @@ class _DocumentsTab:
         data = {"header": {"customer": customer}}
         try:
             path = generate_tag(data, tag_data, output_dir=self._OUT_TAG)
+            self._set_status("維修掛件已生成", ok=True)
             if messagebox.askyesno("生成成功",
                     f"維修掛件已生成：\n{path}\n\n是否立即開啟？"):
                 os.startfile(str(path)) if sys.platform == "win32" else subprocess.run(["open", str(path)])
         except Exception as e:
+            self._set_status(f"維修掛件生成失敗：{e}", ok=False)
             messagebox.showerror("生成失敗", str(e))

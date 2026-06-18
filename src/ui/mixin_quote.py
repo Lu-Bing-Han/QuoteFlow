@@ -1090,11 +1090,13 @@ class _QuoteTab:
                         operator=op_var.get().strip(),
                         card_title=_card[0].get("name", "") if _card[0] else "")
                     p3_out_lbl.configure(text=f"✔  已生成：{out_path}", fg=GREEN)
+                    self._set_status("空白報價單已生成", ok=True)
                     if messagebox.askyesno("完成",
                             f"空白報價單已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
                         os.startfile(str(out_path))
                 except Exception as e:
                     p3_out_lbl.configure(text=f"✘  {e}", fg="#c0392b")
+                    self._set_status(f"空白報價單生成失敗：{e}", ok=False)
                     messagebox.showerror("生成失敗", str(e), parent=parent)
                 return
 
@@ -1148,6 +1150,7 @@ class _QuoteTab:
                     quote_type=_qt,
                     card_title=_card[0].get("name", "") if _card[0] else "")
                 p3_out_lbl.configure(text=f"✔  已生成：{out_path}", fg=GREEN)
+                self._set_status("報價單已生成", ok=True)
 
                 if messagebox.askyesno("儲存記錄",
                         "是否將此報價單儲存到資料庫記錄？", parent=parent):
@@ -1193,6 +1196,7 @@ class _QuoteTab:
                     os.startfile(str(out_path))
             except Exception as e:
                 p3_out_lbl.configure(text=f"✘  {e}", fg="#c0392b")
+                self._set_status(f"報價單生成失敗：{e}", ok=False)
                 messagebox.showerror("生成失敗", str(e), parent=parent)
 
         p3_back_btn = ctk.CTkButton(p3_footer, text="← 返回選取品項",

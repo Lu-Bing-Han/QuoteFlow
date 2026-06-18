@@ -272,24 +272,30 @@ class _ScheduleTab:
             origin  = gm_org_var.get().strip()
             if not api_key:
                 messagebox.showwarning("未設定", "請先填入 Google Maps API Key", parent=parent); return
-            fetch_status.configure(text="計算行車時間中…", text_color=GRAY)
-            parent.update_idletasks()
-            try:
-                _, failed = calculate_travel_times(_rows, api_key, origin)
+
+            def _worker():
+                return calculate_travel_times(_rows, api_key, origin)
+
+            def _on_done(result):
+                _, failed = result
                 _refresh_tree()
-                if not failed:
-                    fetch_status.configure(text="行車時間計算完成", text_color="#1e8449")
-                else:
+                if failed:
+                    fetch_status.configure(text_color="#e67e22")
                     detail = "\n".join(
                         f"  第{seq}站「{loc}」— {status}" for seq, loc, status in failed)
-                    fetch_status.configure(
-                        text=f"完成，{len(failed)} 筆失敗（地址找不到）", text_color="#e67e22")
                     messagebox.showwarning("部分地址無法計算",
                         f"以下站點無法取得行車時間：\n{detail}\n\n"
                         "請在 Timetree 的「地點」欄位填入完整地址，或手動在備註中修改。",
                         parent=parent)
-            except Exception as e:
-                fetch_status.configure(text=f"✘ {e}", text_color="#c0392b")
+
+            self._run_task(_worker,
+                            buttons=[_btn_refs["📍 計算時間"]],
+                            status_label=fetch_status,
+                            loading_text="計算行車時間中…",
+                            success_text=lambda result: (
+                                "行車時間計算完成" if not result[1]
+                                else f"完成，{len(result[1])} 筆失敗（地址找不到）"),
+                            on_success=_on_done)
 
         def _sort_location(south_to_north: bool):
             from core.generator_schedule import sort_rows_by_location
@@ -298,21 +304,28 @@ class _ScheduleTab:
             api_key = gm_key_var.get().strip()
             if not api_key:
                 messagebox.showwarning("未設定", "請先填入 Google Maps API Key", parent=parent); return
-            fetch_status.configure(text="Geocoding 中…", text_color=GRAY)
-            parent.update_idletasks()
-            try:
-                sorted_rows, failed = sort_rows_by_location(_rows, api_key, south_to_north)
+
+            def _worker():
+                return sort_rows_by_location(_rows, api_key, south_to_north)
+
+            def _on_done(result):
+                sorted_rows, failed = result
                 _rows.clear()
                 _rows.extend(sorted_rows)
                 _refresh_tree()
                 if failed:
-                    names = ", ".join(r["location"].split("(")[0] for r in failed)
-                    fetch_status.configure(
-                        text=f"排序完成，{len(failed)} 筆無法定位：{names}", text_color="#e67e22")
-                else:
-                    fetch_status.configure(text="排序完成", text_color="#1e8449")
-            except Exception as e:
-                fetch_status.configure(text=f"✘ {e}", text_color="#c0392b")
+                    fetch_status.configure(text_color="#e67e22")
+
+            btn_key = "🧭 南→北" if south_to_north else "🧭 北→南"
+            self._run_task(_worker,
+                            buttons=[_btn_refs[btn_key]],
+                            status_label=fetch_status,
+                            loading_text="Geocoding 中…",
+                            success_text=lambda result: (
+                                "排序完成" if not result[1] else
+                                f"排序完成，{len(result[1])} 筆無法定位：" +
+                                ", ".join(r["location"].split("(")[0] for r in result[1])),
+                            on_success=_on_done)
 
         _BTN_DEFS = [
             ("↑ 上移",      lambda: _move(-1),            "#5d6d7e", "#4d5d6e"),
@@ -324,11 +337,13 @@ class _ScheduleTab:
             ("🧭 北→南",   lambda: _sort_location(False), "#1a5276", "#154360"),
             ("📍 計算時間", _calc_travel,                  "#6c3483", "#5b2c6f"),
         ]
+        _btn_refs: dict = {}
         for text, cmd, color, hover in _BTN_DEFS:
-            ctk.CTkButton(btn_row, text=text, command=cmd,
-                           fg_color=color, hover_color=hover, text_color="white",
-                           font=FONT_S, width=72, height=28, corner_radius=4
-                           ).pack(side="left", padx=(0, 4))
+            btn = ctk.CTkButton(btn_row, text=text, command=cmd,
+                                 fg_color=color, hover_color=hover, text_color="white",
+                                 font=FONT_S, width=72, height=28, corner_radius=4)
+            btn.pack(side="left", padx=(0, 4))
+            _btn_refs[text] = btn
 
         def _fetch_preview():
             from core.generator_schedule import fetch_events, events_to_rows
@@ -338,21 +353,28 @@ class _ScheduleTab:
                 messagebox.showwarning("憑證未填", "請先填入 Session ID 與 CSRF Token", parent=parent)
                 return
             target = date_entry.get_date()
-            fetch_status.configure(text="抓取中…", text_color=GRAY)
-            parent.update_idletasks()
-            try:
-                evs = fetch_events(target, sid, csrf)
-                _rows.clear()
-                _rows.extend(events_to_rows(evs))
-                _refresh_tree()
-                fetch_status.configure(text=f"找到 {len(evs)} 筆事件", text_color="#1e8449")
-            except Exception as e:
-                fetch_status.configure(text=f"✘ {e}", text_color="#c0392b")
 
-        ctk.CTkButton(date_row, text="🔍 抓取", command=_fetch_preview,
-                       fg_color="#117a65", hover_color="#0e6655", text_color="white",
-                       font=FONT, width=80, height=28, corner_radius=4
-                       ).pack(side="left")
+            def _worker():
+                evs = fetch_events(target, sid, csrf)
+                return events_to_rows(evs), len(evs)
+
+            def _on_done(result):
+                rows, _n = result
+                _rows.clear()
+                _rows.extend(rows)
+                _refresh_tree()
+
+            self._run_task(_worker,
+                            buttons=[fetch_btn],
+                            status_label=fetch_status,
+                            loading_text="抓取中…",
+                            success_text=lambda result: f"找到 {result[1]} 筆事件",
+                            on_success=_on_done)
+
+        fetch_btn = ctk.CTkButton(date_row, text="🔍 抓取", command=_fetch_preview,
+                                   fg_color="#117a65", hover_color="#0e6655", text_color="white",
+                                   font=FONT, width=80, height=28, corner_radius=4)
+        fetch_btn.pack(side="left")
 
         # ── Write button ──────────────────────────────────
         out_label = ctk.CTkLabel(parent, text="", fg_color="transparent",

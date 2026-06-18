@@ -217,27 +217,33 @@ class _TrelloTab:
             token   = tok_var.get().strip()
             if not api_key or not token:
                 messagebox.showwarning("憑證未填", "請先填入並儲存 Trello 憑證", parent=parent); return
-            fetch_status.configure(text="抓取中…", text_color=GRAY)
 
             board_name, list_name = _BOARD_SOURCES[source_var.get()]
 
-            def _run(bn=board_name, ln=list_name):
-                try:
-                    cards = fetch_po_cards(api_key, token, board_name=bn, list_name=ln)
-                    update_location_cache(cards, _LOCATION_CACHE_PATH)
-                    def _done(c=cards):
-                        _all_cards.clear(); _all_cards.extend(c); _apply_days_filter()
-                    parent.after(0, _done)
-                except Exception as e:
-                    from sync.syncer_sheets import _fmt_api_error
-                    parent.after(0, lambda e=e: fetch_status.configure(
-                        text=f"✘  {_fmt_api_error(e)}", text_color="#c0392b"))
-            threading.Thread(target=_run, daemon=True).start()
+            def _worker(bn=board_name, ln=list_name):
+                cards = fetch_po_cards(api_key, token, board_name=bn, list_name=ln)
+                update_location_cache(cards, _LOCATION_CACHE_PATH)
+                return cards
 
-        ctk.CTkButton(fetch_row, text="🔄 抓取卡片", command=_fetch,
+            def _on_done(cards):
+                _all_cards.clear(); _all_cards.extend(cards); _apply_days_filter()
+
+            def _on_error(e):
+                from sync.syncer_sheets import _fmt_api_error
+                fetch_status.configure(text=f"✘  {_fmt_api_error(e)}", text_color="#c0392b")
+
+            self._run_task(_worker,
+                            buttons=[fetch_btn],
+                            status_label=fetch_status,
+                            loading_text="抓取中…",
+                            success_text=lambda cards: f"✔  共 {len(cards)} 張",
+                            on_success=_on_done,
+                            on_error=_on_error)
+
+        fetch_btn = ctk.CTkButton(fetch_row, text="🔄 抓取卡片", command=_fetch,
                        fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
-                       font=FONT_S, width=90, height=28, corner_radius=4
-                       ).pack(side="left")
+                       font=FONT_S, width=90, height=28, corner_radius=4)
+        fetch_btn.pack(side="left")
         ctk.CTkButton(fetch_row, text="篩選", command=_apply_days_filter,
                        fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
                        font=FONT_S, width=50, height=28, corner_radius=4
@@ -336,34 +342,37 @@ class _TrelloTab:
                     parent=parent):
                 return
 
-            out_label.configure(text="同步中…", text_color=GRAY)
+            def _worker():
+                return push_cards(selected, _GSHEETS_CREDS_PATH, _GSHEETS_TOKEN_PATH)
 
-            def _run():
-                try:
-                    added = push_cards(selected, _GSHEETS_CREDS_PATH, _GSHEETS_TOKEN_PATH)
-                    def _done(n=added):
-                        token_status.configure(text="✔  已授權（gsheets_token.json 存在）", text_color=GREEN)
-                        out_label.configure(text=f"✔  同步完成，新增 {n} 筆資料", text_color=GREEN)
-                        if messagebox.askyesno("完成", f"新增 {n} 筆資料\n\n是否立即開啟出貨一覽表？", parent=parent):
-                            import webbrowser
-                            from sync.syncer_sheets import _SPREADSHEET_ID, _SHEET_GID
-                            webbrowser.open(f"https://docs.google.com/spreadsheets/d/{_SPREADSHEET_ID}/edit#gid={_SHEET_GID}")
-                    parent.after(0, _done)
-                except Exception as e:
-                    from sync.syncer_sheets import _fmt_api_error
-                    msg = _fmt_api_error(e)
-                    parent.after(0, lambda m=msg: (
-                        out_label.configure(text=f"✘  {m}", text_color="#c0392b"),
-                        messagebox.showerror("同步失敗", m, parent=parent)
-                    ))
-            threading.Thread(target=_run, daemon=True).start()
+            def _on_done(added):
+                token_status.configure(text="✔  已授權（gsheets_token.json 存在）", text_color=GREEN)
+                if messagebox.askyesno("完成", f"新增 {added} 筆資料\n\n是否立即開啟出貨一覽表？", parent=parent):
+                    import webbrowser
+                    from sync.syncer_sheets import _SPREADSHEET_ID, _SHEET_GID
+                    webbrowser.open(f"https://docs.google.com/spreadsheets/d/{_SPREADSHEET_ID}/edit#gid={_SHEET_GID}")
+
+            def _on_error(e):
+                from sync.syncer_sheets import _fmt_api_error
+                msg = _fmt_api_error(e)
+                out_label.configure(text=f"✘  {msg}", text_color="#c0392b")
+                messagebox.showerror("同步失敗", msg, parent=parent)
+
+            self._run_task(_worker,
+                            buttons=[push_btn],
+                            status_label=out_label,
+                            loading_text="同步中…",
+                            success_text=lambda added: f"✔  同步完成，新增 {added} 筆資料",
+                            on_success=_on_done,
+                            on_error=_on_error)
 
         bb = tk.Frame(parent, bg=BG)
         bb.pack(fill="x", padx=12, pady=8)
-        ctk.CTkButton(bb, text="☁  推送選取的卡片 → Google Sheets", command=_push,
+        push_btn = ctk.CTkButton(bb, text="☁  推送選取的卡片 → Google Sheets", command=_push,
                        fg_color="#1a5276", hover_color="#154360", text_color="white",
                        font=("Microsoft JhengHei UI", 12, "bold"),
-                       height=44, corner_radius=8).pack(fill="x")
+                       height=44, corner_radius=8)
+        push_btn.pack(fill="x")
 
     # ════════════════════════════════════════════════════════
     #  Tab 8：生產群組紀錄
@@ -1458,19 +1467,24 @@ class _TrelloTab:
             from sync.downloader_trello import get_board_lists
             api_key, token = _get_creds()
             if not api_key: return
-            status_lbl.configure(text="抓取中…", text_color=GRAY)
-            parent.update_idletasks()
-            try:
-                lists = get_board_lists(api_key, token)
+
+            def _worker():
+                return get_board_lists(api_key, token)
+
+            def _on_done(lists):
                 _list_map.clear()
                 _list_map.update({lst["name"]: lst["id"] for lst in lists})
                 names = list(_list_map.keys())
                 list_cb["values"] = names
                 if names:
                     list_var.set(names[0])
-                status_lbl.configure(text=f"找到 {len(lists)} 個清單", text_color="#1e8449")
-            except Exception as e:
-                status_lbl.configure(text=f"✘ {e}", text_color="#c0392b")
+
+            self._run_task(_worker,
+                            buttons=[fetch_lists_btn, preview_btn],
+                            status_label=status_lbl,
+                            loading_text="抓取中…",
+                            success_text=lambda lists: f"找到 {len(lists)} 個清單",
+                            on_success=_on_done)
 
         def _preview_cards():
             from sync.downloader_trello import get_list_cards
@@ -1479,10 +1493,11 @@ class _TrelloTab:
                 messagebox.showwarning("未選擇清單", "請先抓取清單並選擇", parent=parent); return
             api_key, token = _get_creds()
             if not api_key: return
-            status_lbl.configure(text="載入卡片中…", text_color=GRAY)
-            parent.update_idletasks()
-            try:
-                cards = get_list_cards(_list_map[selected], api_key, token)
+
+            def _worker():
+                return get_list_cards(_list_map[selected], api_key, token)
+
+            def _on_done(cards):
                 _all_cards.clear()
                 _all_cards.extend(cards)
                 tree.delete(*tree.get_children())
@@ -1493,19 +1508,23 @@ class _TrelloTab:
                     att_count = len(card.get("attachments") or [])
                     tree.insert("", "end", values=(card["name"], labels, att_count))
                 tree.selection_set(tree.get_children())
-                status_lbl.configure(text=f"找到 {len(cards)} 張卡片", text_color="#1e8449")
                 prev_title_lbl.configure(text=f"  卡片預覽（共 {len(cards)} 張，可多選）  ")
-            except Exception as e:
-                status_lbl.configure(text=f"✘ {e}", text_color="#c0392b")
 
-        ctk.CTkButton(top, text="抓取清單", command=_fetch_lists,
+            self._run_task(_worker,
+                            buttons=[fetch_lists_btn, preview_btn],
+                            status_label=status_lbl,
+                            loading_text="載入卡片中…",
+                            success_text=lambda cards: f"找到 {len(cards)} 張卡片",
+                            on_success=_on_done)
+
+        fetch_lists_btn = ctk.CTkButton(top, text="抓取清單", command=_fetch_lists,
                        fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
-                       font=FONT_S, width=70, height=26, corner_radius=4
-                       ).grid(row=0, column=2, padx=(0, 4), pady=6)
-        ctk.CTkButton(top, text="預覽卡片", command=_preview_cards,
+                       font=FONT_S, width=70, height=26, corner_radius=4)
+        fetch_lists_btn.grid(row=0, column=2, padx=(0, 4), pady=6)
+        preview_btn = ctk.CTkButton(top, text="預覽卡片", command=_preview_cards,
                        fg_color="#117a65", hover_color="#0e6655", text_color="white",
-                       font=FONT_S, width=70, height=26, corner_radius=4
-                       ).grid(row=0, column=3, padx=(0, 4), pady=6)
+                       font=FONT_S, width=70, height=26, corner_radius=4)
+        preview_btn.grid(row=0, column=3, padx=(0, 4), pady=6)
         status_lbl.grid(row=0, column=4, sticky="w", padx=4, pady=6)
 
         # ── 卡片預覽 Treeview ─────────────────────────────
@@ -1571,34 +1590,37 @@ class _TrelloTab:
             list_name  = list_var.get().strip()
             output_dir = self._get_path("download_cards_dir") / list_name
 
-            out_label.configure(text="下載中…", text_color=GRAY)
-            parent.update_idletasks()
+            report = self._make_progress_reporter(out_label)
 
-            def _progress(cur, total, name):
-                out_label.configure(text=f"下載中… ({cur}/{total}) {name}", text_color=GRAY)
-                parent.update_idletasks()
+            def _worker():
+                def _progress_cb(cur, total, name):
+                    report(f"下載中… ({cur}/{total}) {name}")
+                return trello_download_cards(
+                    selected_cards, output_dir, api_key, token, progress_cb=_progress_cb)
 
-            try:
-                count, failed = trello_download_cards(
-                    selected_cards, output_dir, api_key, token, progress_cb=_progress)
+            def _on_done(result):
+                count, failed = result
                 if failed:
-                    out_label.configure(
-                        text=f"✔  完成 {count} 張，{len(failed)} 個附件失敗", text_color="#e67e22")
+                    out_label.configure(text_color="#e67e22")
                     messagebox.showwarning("部分附件失敗",
                         "以下附件下載失敗：\n" + "\n".join(failed), parent=parent)
-                else:
-                    out_label.configure(
-                        text=f"✔  成功下載 {count} 張卡片至：{output_dir}", text_color="#1e8449")
                 if messagebox.askyesno("下載完成",
                         f"共 {count} 張卡片\n\n是否立即開啟資料夾？", parent=parent):
                     os.startfile(str(output_dir))
-            except Exception as e:
-                out_label.configure(text=f"✘  {e}", text_color="#c0392b")
-                messagebox.showerror("下載失敗", str(e), parent=parent)
+
+            self._run_task(_worker,
+                            buttons=[download_btn],
+                            status_label=out_label,
+                            loading_text="下載中…",
+                            success_text=lambda result: (
+                                f"✔  完成 {result[0]} 張，{len(result[1])} 個附件失敗" if result[1]
+                                else f"✔  成功下載 {result[0]} 張卡片至：{output_dir}"),
+                            on_success=_on_done)
 
         bb = ctk.CTkFrame(parent, fg_color=BG, corner_radius=0)
         bb.pack(fill="x", padx=12, pady=6)
-        ctk.CTkButton(bb, text="⬇  下載選取的卡片", command=_download,
+        download_btn = ctk.CTkButton(bb, text="⬇  下載選取的卡片", command=_download,
                        fg_color="#1a5276", hover_color="#154360", text_color="white",
                        font=("Microsoft JhengHei UI", 12, "bold"),
-                       height=44, corner_radius=8).pack(fill="x")
+                       height=44, corner_radius=8)
+        download_btn.pack(fill="x")
