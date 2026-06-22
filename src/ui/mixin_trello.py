@@ -375,6 +375,213 @@ class _TrelloTab:
         push_btn.pack(fill="x")
 
     # ════════════════════════════════════════════════════════
+    #  Tab：對帳單
+    # ════════════════════════════════════════════════════════
+    def _build_tab_statement(self, parent, FONT, FONTB, BG):
+        GRAY  = "#5d6d7e"
+        GREEN = "#1e8449"
+        FONT_S = ("Microsoft JhengHei UI", 9)
+
+        _all_cards:       list[dict] = []
+        _displayed_cards: list[dict] = []
+
+        # ── 抓取列 ────────────────────────────────────────
+        fetch_row = tk.Frame(parent, bg=BG)
+        fetch_row.pack(fill="x", padx=12, pady=(12, 2))
+
+        ctk.CTkLabel(fetch_row, text="來源：物流事業部1 — 本周下單",
+                      fg_color="transparent", font=FONT_S, text_color=GRAY
+                      ).pack(side="left", padx=(0, 12))
+
+        fetch_status = ctk.CTkLabel(fetch_row, text="", fg_color="transparent",
+                                     font=FONT_S, text_color=GRAY)
+        fetch_status.pack(side="left", padx=(8, 0))
+
+        ctk.CTkLabel(fetch_row, text="下單日期 從：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(8, 2))
+        from tkcalendar import DateEntry
+        from datetime import date as _dt_cls
+        date_entry = DateEntry(fetch_row, width=10, date_pattern='y/m/d',
+                                font=FONT_S, maxdate=_dt_cls.today())
+        date_entry.pack(side="left", padx=(0, 2))
+        ctk.CTkButton(fetch_row, text="全部",
+                       command=lambda: _show_all(),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=50, height=28, corner_radius=4
+                       ).pack(side="left", padx=(2, 0))
+
+        def _render_tree(cards: list[dict]):
+            _displayed_cards.clear()
+            _displayed_cards.extend(cards)
+            tree.delete(*tree.get_children())
+            for c in cards:
+                tree.insert("", "end", values=(
+                    c["created_date"],
+                    c["company"],
+                    c["product"],
+                    c["quantity"],
+                    c.get("amount", ""),
+                    c.get("payment_raw", ""),
+                ))
+            tree.selection_set(tree.get_children())
+            prev_title_lbl.configure(
+                text=f"  本周下單卡片（共 {len(cards)} 張，可多選）  ")
+
+        def _apply_days_filter():
+            from_date = date_entry.get_date()
+            filtered = [c for c in _all_cards
+                        if c.get("created_dt") and c["created_dt"] >= from_date]
+            _render_tree(filtered)
+            fetch_status.configure(
+                text=f"✔  共 {len(_all_cards)} 張，篩選後 {len(filtered)} 張",
+                text_color=GREEN)
+
+        def _show_all():
+            _render_tree(_all_cards)
+            fetch_status.configure(
+                text=f"✔  共 {len(_all_cards)} 張（全部顯示）",
+                text_color=GREEN)
+
+        def _fetch():
+            from sync.syncer_trello import fetch_po_cards, update_location_cache
+            from _paths import _LOCATION_CACHE_PATH
+            tr_cfg  = self._config.get("trello", {})
+            api_key = tr_cfg.get("api_key", "").strip()
+            token   = tr_cfg.get("token",   "").strip()
+            if not api_key or not token:
+                messagebox.showwarning("憑證未填",
+                    "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證", parent=parent); return
+
+            def _worker():
+                cards = fetch_po_cards(api_key, token)
+                update_location_cache(cards, _LOCATION_CACHE_PATH)
+                return cards
+
+            def _on_done(cards):
+                _all_cards.clear(); _all_cards.extend(cards); _apply_days_filter()
+
+            def _on_error(e):
+                from sync.syncer_sheets import _fmt_api_error
+                fetch_status.configure(text=f"✘  {_fmt_api_error(e)}", text_color="#c0392b")
+
+            self._run_task(_worker,
+                            buttons=[fetch_btn],
+                            status_label=fetch_status,
+                            loading_text="抓取中…",
+                            success_text=lambda cards: f"✔  共 {len(cards)} 張",
+                            on_success=_on_done,
+                            on_error=_on_error)
+
+        fetch_btn = ctk.CTkButton(fetch_row, text="🔄 抓取卡片", command=_fetch,
+                       fg_color="#2e86c1", hover_color="#1a5276", text_color="white",
+                       font=FONT_S, width=90, height=28, corner_radius=4)
+        fetch_btn.pack(side="left")
+        ctk.CTkButton(fetch_row, text="篩選", command=_apply_days_filter,
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=50, height=28, corner_radius=4
+                       ).pack(side="left", padx=(4, 0))
+
+        # ── 卡片預覽 Treeview ─────────────────────────────
+        prev_outer = tk.Frame(parent, bg="#d0d7de")
+        prev_outer.pack(fill="both", expand=True, padx=12, pady=4)
+        prev_inner = tk.Frame(prev_outer, bg=BG)
+        prev_inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+        prev_title_lbl = ctk.CTkLabel(prev_inner,
+                                       text="  本周下單卡片（共 0 張，可多選）  ",
+                                       fg_color="transparent", text_color=GRAY, font=FONT_S)
+        prev_title_lbl.pack(anchor="w", padx=10, pady=(4, 0))
+
+        tree_frame = tk.Frame(prev_inner, bg=BG)
+        tree_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+
+        cols = ("date", "company", "product", "qty", "amount", "payment")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
+                             selectmode="extended", height=10)
+        tree.heading("date",    text="下單日期")
+        tree.heading("company", text="客戶名稱")
+        tree.heading("product", text="品號 / 產品")
+        tree.heading("qty",     text="數量")
+        tree.heading("amount",  text="應收總金額")
+        tree.heading("payment", text="付款方式")
+        tree.column("date",    width=70,  anchor="center", stretch=False)
+        tree.column("company", width=140, anchor="w",      stretch=False)
+        tree.column("product", width=240, anchor="w",      stretch=True)
+        tree.column("qty",     width=50,  anchor="center", stretch=False)
+        tree.column("amount",  width=90,  anchor="e",      stretch=False)
+        tree.column("payment", width=120, anchor="w",      stretch=False)
+
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+
+        # ── 拖曳框選 ──────────────────────────────────────
+        _bind_drag_select(tree)
+
+        # ── 全選 / 取消全選 ───────────────────────────────
+        sel_row = tk.Frame(parent, bg=BG)
+        sel_row.pack(fill="x", padx=12, pady=(2, 0))
+        ctk.CTkButton(sel_row, text="全選",
+                       command=lambda: tree.selection_set(tree.get_children()),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=60, height=26, corner_radius=4
+                       ).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(sel_row, text="取消全選",
+                       command=lambda: tree.selection_remove(tree.get_children()),
+                       fg_color=GRAY, hover_color="#4d5d6e", text_color="white",
+                       font=FONT_S, width=80, height=26, corner_radius=4
+                       ).pack(side="left")
+
+        # ── 狀態列 & 生成按鈕 ─────────────────────────────
+        out_label = ctk.CTkLabel(parent, text="", fg_color="transparent",
+                                  font=FONT_S, text_color=GRAY, anchor="w", wraplength=700)
+        out_label.pack(fill="x", padx=16, pady=(4, 0))
+
+        def _generate():
+            from core.generator_statement import generate_statement
+            from _paths import _LOCATION_CACHE_PATH
+            sel_ids = tree.selection()
+            if not sel_ids:
+                messagebox.showwarning("未選擇", "請先選取要產出對帳單的卡片", parent=parent); return
+
+            indices  = [tree.index(i) for i in sel_ids]
+            selected = [_displayed_cards[i] for i in indices]
+
+            location_lookup = {}
+            if _LOCATION_CACHE_PATH.exists():
+                try:
+                    location_lookup = json.loads(_LOCATION_CACHE_PATH.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+            def _worker():
+                out_dir = self._get_path("output_statement")
+                return [generate_statement(c, location_lookup, output_dir=out_dir) for c in selected]
+
+            def _on_done(paths):
+                msg = "\n".join(str(p) for p in paths)
+                if messagebox.askyesno("生成成功",
+                        f"已生成 {len(paths)} 份對帳單：\n{msg}\n\n是否立即開啟？", parent=parent):
+                    for p in paths:
+                        os.startfile(p)
+
+            self._run_task(_worker,
+                            buttons=[gen_btn],
+                            status_label=out_label,
+                            loading_text="生成中…",
+                            success_text=lambda paths: f"✔  已生成 {len(paths)} 份對帳單",
+                            on_success=_on_done)
+
+        bb = tk.Frame(parent, bg=BG)
+        bb.pack(fill="x", padx=12, pady=8)
+        gen_btn = ctk.CTkButton(bb, text="📄  生成對帳單（選取的卡片）", command=_generate,
+                       fg_color="#1e8449", hover_color="#196f3d", text_color="white",
+                       font=("Microsoft JhengHei UI", 12, "bold"),
+                       height=44, corner_radius=8)
+        gen_btn.pack(fill="x")
+
+    # ════════════════════════════════════════════════════════
     #  Tab 8：生產群組紀錄
     # ════════════════════════════════════════════════════════
     def _build_tab_production(self, parent, FONT, FONTB, BG):

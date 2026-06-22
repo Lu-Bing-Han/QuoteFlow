@@ -128,6 +128,7 @@ class App(
         "output_tag":        r"Z:\待維修機台資料",
         "output_label":      r"Z:\出貨單\Quoteflow_output",
         "output_quote":      r"Z:\出貨單\Quoteflow_output\報價單",
+        "output_statement":  r"Z:\出貨單\Quoteflow_output\對帳單",
         "schedule_file":     r"Z:\會計\5.出貨相關\出貨行程表.xlsx",
         "production_file":   r"Z:\會計\●使用表格\公司帳務\1.帳務資料\▲生產群組紀錄(新版)\生產群組紀錄2026(115年).xlsx",
         "download_cards_dir": r"Z:\出貨單\Quoteflow_output\下載卡片",
@@ -141,6 +142,7 @@ class App(
         "fix":        "output_shipping",
         "tag":        "output_tag",
         "label":      "output_label",
+        "statement":  "output_statement",
     }
 
     def __init__(self):
@@ -403,6 +405,7 @@ class App(
         _nav_item("維修單",   "fix")
         _nav_item("維修掛件", "tag")
         _nav_item("標籤生成", "label")
+        _nav_item("對帳單",   "statement")
 
         _nav_group("📅  排程")
         _nav_item("出貨排程", "schedule")
@@ -426,6 +429,7 @@ class App(
         _register("fix",           self._build_tab_fix,           PAD, FONT, FONTB, BG)
         _register("tag",           self._build_tab_tag,           PAD, FONT, FONTB, BG)
         _register("label",         self._build_tab_label,         FONT, FONTB, BG)
+        _register("statement",     self._build_tab_statement,     FONT, FONTB, BG)
         _register("schedule",      self._build_tab_schedule,      FONT, FONTB, BG)
         _register("overview",      self._build_tab_overview,      FONT, FONTB, BG)
         _register("production",    self._build_tab_production,    FONT, FONTB, BG)
@@ -510,6 +514,7 @@ class App(
             ("output_tag",        "維修掛件 輸出資料夾",        False),
             ("output_label",      "標籤 輸出資料夾",            False),
             ("output_quote",      "報價單 輸出資料夾",          False),
+            ("output_statement",  "對帳單 輸出資料夾",          False),
             ("download_cards_dir","下載卡片 輸出資料夾",        False),
             ("schedule_file",     "出貨行程表 .xlsx",           True),
             ("production_file",   "生產群組紀錄 .xlsx",         True),

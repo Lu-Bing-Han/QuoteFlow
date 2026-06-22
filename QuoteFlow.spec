@@ -27,6 +27,7 @@ a = Analysis(
         "core.generator_inspection",
         "core.generator_schedule",
         "core.generator_quote",
+        "core.generator_statement",
         "sync",
         "sync.syncer_trello",
         "sync.syncer_sheets",

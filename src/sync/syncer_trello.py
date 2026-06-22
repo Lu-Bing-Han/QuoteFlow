@@ -43,15 +43,210 @@ def _get_list_id(api_key: str, token: str, board_id: str, list_name: str) -> str
     raise ValueError(f"找不到清單「{list_name}」")
 
 
+def _parse_order_date(raw: str) -> tuple[str, date_type | None]:
+    """解析下單日期字串，回傳 ('M/D', date) 或 ('', None)。"""
+    raw = re.sub(r'\\(?=[/\-.])', '', (raw or "").strip())
+    # 三段式：114/6/8、2025/6/8、2025-06-08、115.06.18
+    m3 = re.match(r'(\d{2,4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})', raw)
+    # 兩段式：6/8、06/08
+    m2 = re.match(r'(\d{1,2})[/\-\.](\d{1,2})', raw)
+    if m3:
+        yr, mo, dy = int(m3.group(1)), int(m3.group(2)), int(m3.group(3))
+        if yr < 200:
+            yr += 1911
+        try:
+            return f"{mo}/{dy}", date_type(yr, mo, dy)
+        except ValueError:
+            return "", None
+    if m2:
+        mo, dy = int(m2.group(1)), int(m2.group(2))
+        yr = date_type.today().year
+        try:
+            return f"{mo}/{dy}", date_type(yr, mo, dy)
+        except ValueError:
+            return "", None
+    return "", None
+
+
+def _parse_comment_order_date(text: str) -> tuple[str, date_type | None]:
+    """從留言中的「115.06.18已下單」格式解析下單日期。"""
+    if "已下單" not in (text or ""):
+        return "", None
+    m = re.search(r'(\d{2,4}\\?[/\-\.]\d{1,2}\\?[/\-\.]\d{1,2})\s*已下單', text)
+    if not m:
+        return "", None
+    return _parse_order_date(m.group(1))
+
+
+def _parse_compact_roc_date(text: str) -> tuple[str, date_type | None]:
+    """從附件檔名中的 1150618 格式解析民國日期。"""
+    for m in re.finditer(r'(?<!\d)(\d{3})(\d{2})(\d{2})(?!\d)', text or ""):
+        roc, mo, dy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            return f"{mo}/{dy}", date_type(roc + 1911, mo, dy)
+        except ValueError:
+            continue
+    return "", None
+
+
+def _parse_attachment_order_date(attachments: list[dict]) -> tuple[str, date_type | None]:
+    """從附件名稱解析訂購單檔名中的日期，例如 ...-1150618.jpg。"""
+    texts = [
+        f"{att.get('name') or ''} {att.get('url') or ''}"
+        for att in (attachments or [])
+    ]
+    texts.sort(key=lambda text: 0 if "訂購單" in text else 1)
+    for text in texts:
+        m = re.search(r'(\d{2,4}\\?[/\-\.]\d{1,2}\\?[/\-\.]\d{1,2})', text)
+        if m:
+            order_date, order_dt = _parse_order_date(m.group(1))
+            if order_date:
+                return order_date, order_dt
+        order_date, order_dt = _parse_compact_roc_date(text)
+        if order_date:
+            return order_date, order_dt
+    return "", None
+
+
+def _parse_actions_order_date(actions: list[dict]) -> tuple[str, date_type | None]:
+    """從已載入的 Trello actions 解析留言中的已下單日期。"""
+    for action in actions or []:
+        data = action.get("data") or {}
+        text = (data.get("text") or "").strip()
+        order_date, order_dt = _parse_comment_order_date(text)
+        if order_date:
+            return order_date, order_dt
+    return "", None
+
+
+def _parse_action_date(action: dict) -> tuple[str, date_type | None]:
+    """解析 Trello action date，回傳 ('M/D', date) 或 ('', None)。"""
+    raw = (action.get("date") or "").strip()
+    if not raw:
+        return "", None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return "", None
+    return f"{dt.month}/{dt.day}", dt.date()
+
+
+def _parse_move_to_list_date(
+    actions: list[dict],
+    list_id: str,
+) -> tuple[str, date_type | None]:
+    """從 Trello actions 解析卡片移動到指定清單的日期。"""
+    for action in actions or []:
+        data = action.get("data") or {}
+        list_after = data.get("listAfter") or {}
+        if action.get("type") == "updateCard" and list_after.get("id") == list_id:
+            return _parse_action_date(action)
+    return "", None
+
+
+def _get_comment_order_date(
+    card_id: str,
+    api_key: str,
+    token: str,
+) -> tuple[str, date_type | None]:
+    """讀取 Trello 留言，抓出第一個「已下單」日期；失敗時回傳空值走 fallback。"""
+    try:
+        resp = requests.get(
+            f"{_API_BASE}/cards/{card_id}/actions",
+            params={
+                **_auth(api_key, token),
+                "filter": "commentCard",
+                "fields": "data,date",
+                "limit": 50,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except requests.RequestException:
+        return "", None
+
+    return _parse_actions_order_date(resp.json())
+
+
+def _get_move_to_list_date(
+    card_id: str,
+    list_id: str,
+    api_key: str,
+    token: str,
+) -> tuple[str, date_type | None]:
+    """讀取 Trello 移動紀錄，抓出卡片移入目前清單的日期。"""
+    try:
+        resp = requests.get(
+            f"{_API_BASE}/cards/{card_id}/actions",
+            params={
+                **_auth(api_key, token),
+                "filter": "updateCard:idList",
+                "fields": "data,date,type",
+                "limit": 100,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except requests.RequestException:
+        return "", None
+
+    return _parse_move_to_list_date(resp.json(), list_id)
+
+
+def _resolve_order_date(
+    card: dict,
+    desc_data: dict,
+    list_id: str,
+    api_key: str,
+    token: str,
+) -> tuple[str, date_type | None]:
+    """依序從描述、留言、附件、標題與移入清單日期決定下單日期。"""
+    if desc_data["order_date_str"]:
+        return desc_data["order_date_str"], desc_data["order_date_dt"]
+
+    order_date, order_dt = _parse_actions_order_date(card.get("actions") or [])
+    if order_date:
+        return order_date, order_dt
+
+    order_date, order_dt = _get_comment_order_date(card["id"], api_key, token)
+    if order_date:
+        return order_date, order_dt
+
+    order_date, order_dt = _parse_attachment_order_date(card.get("attachments") or [])
+    if order_date:
+        return order_date, order_dt
+
+    order_date, order_dt = _parse_bracket_date(card["name"])
+    if order_date:
+        return order_date, order_dt
+
+    order_date, order_dt = _parse_move_to_list_date(card.get("actions") or [], list_id)
+    if order_date:
+        return order_date, order_dt
+
+    order_date, order_dt = _get_move_to_list_date(card["id"], list_id, api_key, token)
+    if order_date:
+        return order_date, order_dt
+
+    ts = int(card["id"][:8], 16)
+    dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+    return f"{dt.month}/{dt.day}", dt.date()
+
+
 def _parse_desc(desc: str) -> dict:
-    """從卡片描述萃取付款方式、交期、應收總金額、下單日期。"""
+    """從卡片描述萃取聯絡人/電話/傳真/地址、付款方式、交期、應收總金額、下單日期。"""
     def _find(pattern):
         m = re.search(pattern, desc or "", re.MULTILINE)
         return m.group(1).strip() if m else ""
 
-    payment_raw    = _find(r'付款方式[：:]\s*(.+)')
-    delivery       = _find(r'交期[：:]\s*(.+)')
-    amount         = _find(r'應收總金額[：:]\s*(.+)')
+    company_desc   = _find(r'公司名稱[ \t]*[：:][ \t]*(.+)')
+    contact        = _find(r'聯絡人[ \t]*[：:][ \t]*(.+)')
+    phone          = _find(r'電話[ \t]*[：:][ \t]*(.+)')
+    fax            = _find(r'傳真[ \t]*[：:][ \t]*(.+)')
+    address        = _find(r'地址[ \t]*[：:][ \t]*(.+)')
+    payment_raw    = _find(r'付款方式[ \t]*[：:][ \t]*(.+)')
+    delivery       = _find(r'交期[ \t]*[：:][ \t]*(.+)')
+    amount         = _find(r'應收總金額[ \t]*[：:][ \t]*(.+)')
     order_date_raw = _find(r'下單日期[\s　]*[：:﹕][\s　]*(.+)')
 
     if "現金" in payment_raw:
@@ -63,33 +258,14 @@ def _parse_desc(desc: str) -> dict:
     else:
         payment_type = ""
 
-    order_date_str = ""
-    order_date_dt  = None
-    if order_date_raw:
-        raw = order_date_raw.strip()
-        # 三段式：114/6/8、2025/6/8、2025-06-08
-        m3 = re.match(r'(\d{2,4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})', raw)
-        # 兩段式：6/8、06/08
-        m2 = re.match(r'(\d{1,2})[/\-\.](\d{1,2})', raw)
-        if m3:
-            yr, mo, dy = int(m3.group(1)), int(m3.group(2)), int(m3.group(3))
-            if yr < 200:
-                yr += 1911
-            order_date_str = f"{mo}/{dy}"
-            try:
-                order_date_dt = date_type(yr, mo, dy)
-            except ValueError:
-                pass
-        elif m2:
-            mo, dy = int(m2.group(1)), int(m2.group(2))
-            yr = date_type.today().year
-            order_date_str = f"{mo}/{dy}"
-            try:
-                order_date_dt = date_type(yr, mo, dy)
-            except ValueError:
-                pass
+    order_date_str, order_date_dt = _parse_order_date(order_date_raw)
 
     return {
+        "company_desc":   company_desc,
+        "contact":        contact,
+        "phone":          phone,
+        "fax":            fax,
+        "address":        address,
         "payment_raw":    payment_raw,
         "payment_type":   payment_type,
         "delivery":       delivery,
@@ -166,7 +342,14 @@ def fetch_po_cards(api_key: str, token: str,
 
     resp = requests.get(
         f"{_API_BASE}/lists/{list_id}/cards",
-        params={**_auth(api_key, token), "fields": "id,name,due,shortUrl,desc,labels"},
+        params={
+            **_auth(api_key, token),
+            "fields": "id,name,due,shortUrl,desc,labels,attachments",
+            "attachments": "true",
+            "actions": "commentCard,updateCard:idList",
+            "action_fields": "data,date,type",
+            "action_limit": 100,
+        },
         timeout=15,
     )
     resp.raise_for_status()
@@ -176,17 +359,7 @@ def fetch_po_cards(api_key: str, token: str,
         fields = _parse_title(card["name"])
         desc_data = _parse_desc(card.get("desc", ""))
 
-        # 優先使用描述裡的下單日期，否則 fallback 到標題括號日期，最後用卡片建立時間
-        if desc_data["order_date_str"]:
-            order_date = desc_data["order_date_str"]
-            order_dt   = desc_data["order_date_dt"]
-        else:
-            order_date, order_dt = _parse_bracket_date(card["name"])
-            if not order_date:
-                ts = int(card["id"][:8], 16)
-                dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-                order_date = f"{dt.month}/{dt.day}"
-                order_dt   = dt.date()
+        order_date, order_dt = _resolve_order_date(card, desc_data, list_id, api_key, token)
 
         label_names = [lb.get("name", "") for lb in (card.get("labels") or [])]
         has_remodel = "Y" if any("改造" in n for n in label_names) else "N"
@@ -203,6 +376,11 @@ def fetch_po_cards(api_key: str, token: str,
             "created_dt":   order_dt,
             "due_date":     card.get("due") or "",
             "card_url":     card.get("shortUrl", ""),
+            "company_desc": desc_data["company_desc"],
+            "contact":      desc_data["contact"],
+            "phone":        desc_data["phone"],
+            "fax":          desc_data["fax"],
+            "address":      desc_data["address"],
             "payment_raw":  desc_data["payment_raw"],
             "payment_type": desc_data["payment_type"],
             "delivery":     desc_data["delivery"],

@@ -24,3 +24,6 @@ __pycache__/
 # 系統檔
 .DS_Store
 Thumbs.db
+
+# 執行紀錄
+*.log
