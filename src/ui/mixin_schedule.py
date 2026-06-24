@@ -215,7 +215,8 @@ class _ScheduleTab:
             ctk.CTkLabel(dlg, text="地點：", fg_color="transparent",
                           font=FONT, text_color="#2c3e50"
                           ).grid(row=0, column=0, padx=10, pady=6, sticky="w")
-            loc_var = tk.StringVar(value=_display_loc(location))
+            original_display = _display_loc(location)
+            loc_var = tk.StringVar(value=original_display)
             cb = ttk.Combobox(dlg, textvariable=loc_var, font=FONT,
                                width=26, values=_addr_display)
             cb.grid(row=0, column=1, padx=10, pady=6)
@@ -230,7 +231,11 @@ class _ScheduleTab:
 
             def _confirm():
                 typed = loc_var.get().strip()
-                full_loc = _addr_map.get(typed, typed)
+                if typed == original_display:
+                    # 地點欄位沒被改過（例如只是編輯備註），保留原本完整地址，避免被截斷成短名稱
+                    full_loc = location
+                else:
+                    full_loc = _addr_map.get(typed, typed)
                 if on_confirm:
                     on_confirm(full_loc, note_var.get().strip())
                 dlg.destroy()

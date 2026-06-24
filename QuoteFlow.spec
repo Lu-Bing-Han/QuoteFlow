@@ -36,6 +36,7 @@ a = Analysis(
         "sync.syncer_accounting",
         "sync.creator_trello",
         "sync.downloader_trello",
+        "sync.syncer_gemini",
     ],
     hookspath=[],
     hooksconfig={},

@@ -229,8 +229,8 @@ class _TrelloTab:
                 _all_cards.clear(); _all_cards.extend(cards); _apply_days_filter()
 
             def _on_error(e):
-                from sync.syncer_sheets import _fmt_api_error
-                fetch_status.configure(text=f"✘  {_fmt_api_error(e)}", text_color="#c0392b")
+                from sync.syncer_trello import _fmt_trello_error
+                fetch_status.configure(text=f"✘  {_fmt_trello_error(e)}", text_color="#c0392b")
 
             self._run_task(_worker,
                             buttons=[fetch_btn],
@@ -461,8 +461,8 @@ class _TrelloTab:
                 _all_cards.clear(); _all_cards.extend(cards); _apply_days_filter()
 
             def _on_error(e):
-                from sync.syncer_sheets import _fmt_api_error
-                fetch_status.configure(text=f"✘  {_fmt_api_error(e)}", text_color="#c0392b")
+                from sync.syncer_trello import _fmt_trello_error
+                fetch_status.configure(text=f"✘  {_fmt_trello_error(e)}", text_color="#c0392b")
 
             self._run_task(_worker,
                             buttons=[fetch_btn],
@@ -533,13 +533,24 @@ class _TrelloTab:
                        font=FONT_S, width=80, height=26, corner_radius=4
                        ).pack(side="left")
 
+        # ── Gemini 選項 ───────────────────────────────────
+        gemini_row = tk.Frame(parent, bg=BG)
+        gemini_row.pack(fill="x", padx=12, pady=(2, 0))
+        gemini_var = tk.BooleanVar(value=False)
+        ctk.CTkCheckBox(gemini_row, text="用 Gemini 讀留言判斷已收金額（找不到才用原本的判斷方式）",
+                         variable=gemini_var,
+                         font=FONT_S, text_color=GRAY,
+                         fg_color="#2e86c1", hover_color="#1a5276"
+                         ).pack(side="left")
+
         # ── 狀態列 & 生成按鈕 ─────────────────────────────
         out_label = ctk.CTkLabel(parent, text="", fg_color="transparent",
                                   font=FONT_S, text_color=GRAY, anchor="w", wraplength=700)
         out_label.pack(fill="x", padx=16, pady=(4, 0))
 
         def _generate():
-            from core.generator_statement import generate_statement
+            from core.generator_statement import generate_statement, parse_amount
+            from sync.syncer_gemini import extract_paid_amount
             from _paths import _LOCATION_CACHE_PATH
             sel_ids = tree.selection()
             if not sel_ids:
@@ -547,6 +558,7 @@ class _TrelloTab:
 
             indices  = [tree.index(i) for i in sel_ids]
             selected = [_displayed_cards[i] for i in indices]
+            use_gemini = gemini_var.get()
 
             location_lookup = {}
             if _LOCATION_CACHE_PATH.exists():
@@ -555,22 +567,45 @@ class _TrelloTab:
                 except Exception:
                     pass
 
+            srv_cfg     = self._config.get("line_server", {})
+            server_url  = srv_cfg.get("url", "")
+            server_secret = srv_cfg.get("secret", "")
+
             def _worker():
                 out_dir = self._get_path("output_statement")
-                return [generate_statement(c, location_lookup, output_dir=out_dir) for c in selected]
+                paths = []
+                gemini_hits = 0
+                for c in selected:
+                    gemini_amount = None
+                    if use_gemini:
+                        try:
+                            result = extract_paid_amount(
+                                c.get("comments_text", ""),
+                                parse_amount(c.get("amount", "")),
+                                server_url, server_secret)
+                            if result["found"]:
+                                gemini_amount = result["paid_amount"]
+                                gemini_hits += 1
+                        except Exception:
+                            pass   # Gemini 判斷失敗時，靜默回退到原本的判斷方式
+                    paths.append(generate_statement(c, location_lookup, output_dir=out_dir,
+                                                     gemini_paid_amount=gemini_amount))
+                return paths, gemini_hits
 
-            def _on_done(paths):
+            def _on_done(result):
+                paths, gemini_hits = result
                 msg = "\n".join(str(p) for p in paths)
+                hint = f"（其中 {gemini_hits} 份採用 Gemini 判斷的已收金額）" if use_gemini else ""
                 if messagebox.askyesno("生成成功",
-                        f"已生成 {len(paths)} 份對帳單：\n{msg}\n\n是否立即開啟？", parent=parent):
+                        f"已生成 {len(paths)} 份對帳單{hint}：\n{msg}\n\n是否立即開啟？", parent=parent):
                     for p in paths:
                         os.startfile(p)
 
             self._run_task(_worker,
                             buttons=[gen_btn],
                             status_label=out_label,
-                            loading_text="生成中…",
-                            success_text=lambda paths: f"✔  已生成 {len(paths)} 份對帳單",
+                            loading_text="生成中…" + ("（Gemini 讀留言中…）" if use_gemini else ""),
+                            success_text=lambda r: f"✔  已生成 {len(r[0])} 份對帳單",
                             on_success=_on_done)
 
         bb = tk.Frame(parent, bg=BG)

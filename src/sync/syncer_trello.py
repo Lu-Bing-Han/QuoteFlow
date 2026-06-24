@@ -17,6 +17,18 @@ def _auth(api_key: str, token: str) -> dict:
     return {"key": api_key, "token": token}
 
 
+def _fmt_trello_error(e: Exception) -> str:
+    """將 Trello API 常見錯誤轉成易讀訊息；同時清除網址中的 key/token，避免外洩到畫面上。"""
+    msg = re.sub(r'([?&](?:key|token)=)[^&\s]+', r'\1***', str(e))
+    if "401" in msg or "invalid token" in msg.lower():
+        return "Trello 憑證無效或已過期，請至「出貨一覽表」頁籤重新填入並儲存 API Key/Token"
+    if "404" in msg:
+        return "找不到看板或清單，請確認看板/清單名稱是否正確"
+    if "429" in msg:
+        return "Trello API 請求過於頻繁，請稍後再試"
+    return msg
+
+
 def _get_board_id(api_key: str, token: str, board_name: str) -> str:
     resp = requests.get(
         f"{_API_BASE}/members/me/boards",
@@ -117,6 +129,20 @@ def _parse_actions_order_date(actions: list[dict]) -> tuple[str, date_type | Non
         if order_date:
             return order_date, order_dt
     return "", None
+
+
+def _extract_comments(actions: list[dict]) -> str:
+    """從已載入的 actions 整理出留言紀錄文字（依時間排序），供 AI 輔助判斷已收金額等用途。"""
+    comments = []
+    for action in actions or []:
+        if action.get("type") != "commentCard":
+            continue
+        text = ((action.get("data") or {}).get("text") or "").strip()
+        date = (action.get("date") or "")[:10]
+        if text:
+            comments.append((date, text))
+    comments.sort(key=lambda c: c[0])
+    return "\n".join(f"[{date}] {text}" for date, text in comments)
 
 
 def _parse_action_date(action: dict) -> tuple[str, date_type | None]:
@@ -386,6 +412,7 @@ def fetch_po_cards(api_key: str, token: str,
             "delivery":     desc_data["delivery"],
             "amount":       desc_data["amount"],
             "has_remodel":  has_remodel,
+            "comments_text": _extract_comments(card.get("actions") or []),
         })
     return result
 

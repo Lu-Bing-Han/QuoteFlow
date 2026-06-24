@@ -222,6 +222,47 @@ def _extract_info(message: str) -> dict:
         return dict(_EMPTY_INFO)
 
 
+_PAID_AMOUNT_EMPTY = {"found": False, "paid_amount": 0, "reason": ""}
+
+
+def _extract_paid_amount(comments: str, total_amount: float) -> dict:
+    """讀 Trello 留言紀錄，判斷是否有明確提到已實際收到的金額（含百分比換算）。"""
+    if not GEMINI_API_KEY:
+        print("[Gemini paid_amount SKIP] GEMINI_API_KEY 未設定", flush=True)
+        return dict(_PAID_AMOUNT_EMPTY)
+    try:
+        client = _gemini_client()
+        prompt = (
+            "你是一個對帳助手。以下是 Trello 卡片上的留言紀錄（可能包含多筆對話、銀行轉帳通知等）。\n"
+            "請判斷裡面是否有明確提到「客戶已經實際付款/匯款/收到」的具體金額。\n"
+            "規則：\n"
+            "1. 只採信「已經發生、已確認收到」的金額，不要採信報價、應收、預計、詢問中的金額。\n"
+            "2. 若留言提到的是百分比（例如「訂金50%」），請用總金額換算成實際數字。\n"
+            "3. 找不到明確已收金額時，found 填 false，paid_amount 填 0。\n"
+            "4. 只回傳 JSON 物件，格式："
+            "{\"found\": true/false, \"paid_amount\": 數字, \"reason\": \"簡短說明依據\"}，"
+            "不要包含 markdown 或其他文字。\n\n"
+            f"總金額（未稅）：{total_amount}\n\n留言紀錄：\n{comments}"
+        )
+        resp = _gemini_generate(client, prompt)
+        print(f"[Gemini paid_amount RAW] {resp.text!r}", flush=True)
+        text = resp.text.strip()
+        if "```" in text:
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.split("```")[0]
+        result = json.loads(text.strip())
+        return {
+            "found":       bool(result.get("found")),
+            "paid_amount": float(result.get("paid_amount") or 0),
+            "reason":      str(result.get("reason", "")),
+        }
+    except Exception as e:
+        print(f"[Gemini paid_amount ERROR] {type(e).__name__}: {e}", flush=True)
+        return dict(_PAID_AMOUNT_EMPTY)
+
+
 def _download_image(message_id: str) -> bytes | None:
     import urllib.request
     req = urllib.request.Request(
@@ -476,6 +517,17 @@ def extract_text():
         return jsonify(_EMPTY_INFO)
     info = _extract_info(message)
     return jsonify(info)
+
+
+@app.route("/api/extract_paid_amount", methods=["POST"])
+def extract_paid_amount():
+    _auth()
+    data         = request.json or {}
+    comments     = (data.get("comments") or "").strip()
+    total_amount = float(data.get("total_amount") or 0)
+    if not comments:
+        return jsonify(dict(_PAID_AMOUNT_EMPTY))
+    return jsonify(_extract_paid_amount(comments, total_amount))
 
 
 @app.route("/health")
