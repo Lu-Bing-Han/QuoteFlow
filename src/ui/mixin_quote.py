@@ -211,7 +211,7 @@ class _QuoteTab:
                 cart_tax_lbl.configure(text="營業稅 5%：—")
                 cart_tot_lbl.configure(text="合計：—")
                 checkout_btn.configure(
-                    state="normal" if quote_type_var.get() == "空白報價單" else "disabled")
+                    state="normal" if quote_type_var.get() in _NO_CART_QUOTE_TYPES else "disabled")
                 return
             total_qty = sum(v["qty"] for _, v in items)
             cart_cnt_lbl.configure(text=f"{total_qty} 項")
@@ -283,7 +283,7 @@ class _QuoteTab:
             cart_tax_lbl.configure(text=f"營業稅 5%：{_fmt(tax)}")
             cart_tot_lbl.configure(text=f"合計：{_fmt(tot)}")
             checkout_btn.configure(
-                state="normal" if (items or quote_type_var.get() == "空白報價單") else "disabled")
+                state="normal" if (items or quote_type_var.get() in _NO_CART_QUOTE_TYPES) else "disabled")
             if _step[0] == 3:
                 _build_confirm()
 
@@ -485,7 +485,8 @@ class _QuoteTab:
         cfg_row2.pack(fill="x", padx=6, pady=(2, 6))
         ctk.CTkLabel(cfg_row2, text="報價單類型：", fg_color="transparent",
                       font=FONT_S, text_color=GRAY).pack(side="left")
-        _QUOTE_TYPE_OPTIONS = ["一般報價單", "補助報價單", "對比報價單", "空白報價單"]
+        _QUOTE_TYPE_OPTIONS = ["一般報價單", "補助報價單", "對比報價單", "空白報價單", "維修報價單"]
+        _NO_CART_QUOTE_TYPES = {"空白報價單", "維修報價單"}   # 不需購物車品項即可生成的類型
         quote_type_var = tk.StringVar(value=_QUOTE_TYPE_OPTIONS[0])
         ctk.CTkComboBox(cfg_row2, variable=quote_type_var,
                          values=_QUOTE_TYPE_OPTIONS,
@@ -1075,8 +1076,14 @@ class _QuoteTab:
             if not _customer.get("company"):
                 messagebox.showwarning("無客戶資料", "請先在步驟①選取 Trello 卡片", parent=parent); return
 
-            if quote_type_var.get() == "空白報價單":
-                tpl_path = TEMPLATE_DIR / "template_quote - vacancy.xlsx"
+            _blank_type_map = {
+                "空白報價單": ("template_quote - vacancy.xlsx", "報價單", "（空白）"),
+                "維修報價單": ("template_quote - fixed.xlsx",   "維修報價單", ""),
+            }
+            if quote_type_var.get() in _blank_type_map:
+                label = quote_type_var.get()
+                tpl_name, doc_title, suffix = _blank_type_map[label]
+                tpl_path = TEMPLATE_DIR / tpl_name
                 if not tpl_path.exists():
                     messagebox.showerror("找不到範本", f"找不到 {tpl_path}", parent=parent); return
                 q_date   = date_entry.get_date()
@@ -1088,15 +1095,16 @@ class _QuoteTab:
                     out_path = generate_blank_quote(
                         _customer, tpl_path, out_dir, quote_no, q_date,
                         operator=op_var.get().strip(),
-                        card_title=_card[0].get("name", "") if _card[0] else "")
+                        card_title=_card[0].get("name", "") if _card[0] else "",
+                        doc_title=doc_title, suffix=suffix)
                     p3_out_lbl.configure(text=f"✔  已生成：{out_path}", fg=GREEN)
-                    self._set_status("空白報價單已生成", ok=True)
+                    self._set_status(f"{label}已生成", ok=True)
                     if messagebox.askyesno("完成",
-                            f"空白報價單已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
+                            f"{label}已生成\n{out_path}\n\n是否立即開啟？", parent=parent):
                         os.startfile(str(out_path))
                 except Exception as e:
                     p3_out_lbl.configure(text=f"✘  {e}", fg="#c0392b")
-                    self._set_status(f"空白報價單生成失敗：{e}", ok=False)
+                    self._set_status(f"{label}生成失敗：{e}", ok=False)
                     messagebox.showerror("生成失敗", str(e), parent=parent)
                 return
 

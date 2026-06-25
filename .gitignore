@@ -25,5 +25,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Excel 暫存鎖定檔
+~$*
+
 # 執行紀錄
 *.log

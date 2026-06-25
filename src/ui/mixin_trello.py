@@ -385,13 +385,23 @@ class _TrelloTab:
         _all_cards:       list[dict] = []
         _displayed_cards: list[dict] = []
 
+        _BOARD_SOURCES = {
+            "物流事業部1 — 本周下單":          ("物流事業部1", "本周下單"),
+            "物流事業部1 — 已出貨尚未付款":    ("物流事業部1", "已出貨尚未付款"),
+        }
+
         # ── 抓取列 ────────────────────────────────────────
         fetch_row = tk.Frame(parent, bg=BG)
         fetch_row.pack(fill="x", padx=12, pady=(12, 2))
 
-        ctk.CTkLabel(fetch_row, text="來源：物流事業部1 — 本周下單",
-                      fg_color="transparent", font=FONT_S, text_color=GRAY
-                      ).pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(fetch_row, text="來源：", fg_color="transparent",
+                      font=FONT_S, text_color=GRAY).pack(side="left", padx=(0, 2))
+        source_var = tk.StringVar(value=list(_BOARD_SOURCES.keys())[0])
+        ctk.CTkOptionMenu(
+            fetch_row, variable=source_var,
+            values=list(_BOARD_SOURCES.keys()),
+            font=FONT_S, width=200, height=28, corner_radius=4,
+        ).pack(side="left", padx=(0, 12))
 
         fetch_status = ctk.CTkLabel(fetch_row, text="", fg_color="transparent",
                                      font=FONT_S, text_color=GRAY)
@@ -425,7 +435,7 @@ class _TrelloTab:
                 ))
             tree.selection_set(tree.get_children())
             prev_title_lbl.configure(
-                text=f"  本周下單卡片（共 {len(cards)} 張，可多選）  ")
+                text=f"  {source_var.get()} 卡片（共 {len(cards)} 張，可多選）  ")
 
         def _apply_days_filter():
             from_date = date_entry.get_date()
@@ -452,8 +462,10 @@ class _TrelloTab:
                 messagebox.showwarning("憑證未填",
                     "請先至「出貨一覽表」頁籤填入並儲存 Trello 憑證", parent=parent); return
 
-            def _worker():
-                cards = fetch_po_cards(api_key, token)
+            board_name, list_name = _BOARD_SOURCES[source_var.get()]
+
+            def _worker(bn=board_name, ln=list_name):
+                cards = fetch_po_cards(api_key, token, board_name=bn, list_name=ln)
                 update_location_cache(cards, _LOCATION_CACHE_PATH)
                 return cards
 
@@ -488,7 +500,7 @@ class _TrelloTab:
         prev_inner.pack(fill="both", expand=True, padx=1, pady=1)
 
         prev_title_lbl = ctk.CTkLabel(prev_inner,
-                                       text="  本周下單卡片（共 0 張，可多選）  ",
+                                       text="  卡片（共 0 張，可多選）  ",
                                        fg_color="transparent", text_color=GRAY, font=FONT_S)
         prev_title_lbl.pack(anchor="w", padx=10, pady=(4, 0))
 
@@ -551,6 +563,7 @@ class _TrelloTab:
         def _generate():
             from core.generator_statement import generate_statement, parse_amount
             from sync.syncer_gemini import extract_paid_amount
+            from sync.syncer_trello import fetch_card_comments
             from _paths import _LOCATION_CACHE_PATH
             sel_ids = tree.selection()
             if not sel_ids:
@@ -567,9 +580,12 @@ class _TrelloTab:
                 except Exception:
                     pass
 
-            srv_cfg     = self._config.get("line_server", {})
-            server_url  = srv_cfg.get("url", "")
+            srv_cfg       = self._config.get("line_server", {})
+            server_url    = srv_cfg.get("url", "")
             server_secret = srv_cfg.get("secret", "")
+            tr_cfg        = self._config.get("trello", {})
+            api_key       = tr_cfg.get("api_key", "").strip()
+            token         = tr_cfg.get("token", "").strip()
 
             def _worker():
                 out_dir = self._get_path("output_statement")
@@ -579,8 +595,11 @@ class _TrelloTab:
                     gemini_amount = None
                     if use_gemini:
                         try:
+                            # 完整重新抓留言，避免 fetch_po_cards 批次抓取時 action_limit
+                            # 截斷掉較舊的留言（例如很久以前確認收款的紀錄）
+                            comments = fetch_card_comments(c["card_id"], api_key, token)
                             result = extract_paid_amount(
-                                c.get("comments_text", ""),
+                                comments,
                                 parse_amount(c.get("amount", "")),
                                 server_url, server_secret)
                             if result["found"]:

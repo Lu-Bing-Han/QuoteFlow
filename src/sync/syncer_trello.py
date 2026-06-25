@@ -194,6 +194,24 @@ def _get_comment_order_date(
     return _parse_actions_order_date(resp.json())
 
 
+def fetch_card_comments(card_id: str, api_key: str, token: str, limit: int = 1000) -> str:
+    """完整抓取單張卡片的留言紀錄（不受 fetch_po_cards 批次抓取時 action_limit 截斷的影響），
+    供 AI 輔助判斷已收金額等需要完整歷史留言的用途。limit 上限為 Trello API 的 1000。
+    """
+    resp = requests.get(
+        f"{_API_BASE}/cards/{card_id}/actions",
+        params={
+            **_auth(api_key, token),
+            "filter": "commentCard",
+            "fields": "data,date,type",
+            "limit": min(limit, 1000),
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return _extract_comments(resp.json())
+
+
 def _get_move_to_list_date(
     card_id: str,
     list_id: str,

@@ -1168,8 +1168,10 @@ def generate_blank_quote(
     quote_date: date,
     operator: str = "",
     card_title: str = "",
+    doc_title: str = "報價單",
+    suffix: str = "（空白）",
 ) -> Path:
-    """生成空白報價單：填入客戶資料與單號日期，品項區保留模板空白列不動。"""
+    """生成空白/維修報價單：填入客戶資料與單號日期，品項區保留模板空白列不動。"""
     valid_date = quote_date + timedelta(days=15)
 
     try:
@@ -1206,7 +1208,7 @@ def generate_blank_quote(
     roc_date = f"{quote_date.year - 1911}{quote_date.month:02d}{quote_date.day:02d}"
     _bm      = re.search(r'\s*\([^)]+\)', card_title) if card_title else None
     _bracket = _bm.group(0) if _bm else ""
-    _raw     = f"報價單-{company}{_bracket} {contact}（空白）-{roc_date}"
+    _raw     = f"{doc_title}-{company}{_bracket} {contact}{suffix}-{roc_date}"
     safe     = re.sub(r'[\\/:*?"<>|]', "_", _raw).strip()
     out_path = output_dir / f"{safe}.xlsx"
     wb.save(str(out_path))

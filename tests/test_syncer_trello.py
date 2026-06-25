@@ -1,11 +1,25 @@
 from datetime import date
 
 from sync.syncer_trello import (
+    _extract_comments,
     _parse_attachment_order_date,
     _parse_comment_order_date,
     _parse_desc,
     _parse_move_to_list_date,
 )
+
+
+def test_extract_comments_sorts_chronologically_and_filters_type():
+    actions = [
+        {"type": "commentCard", "date": "2026-06-20T00:00:00.000Z", "data": {"text": "後來的留言"}},
+        {"type": "updateCard",  "date": "2026-06-15T00:00:00.000Z", "data": {"text": "不應該出現"}},
+        {"type": "commentCard", "date": "2023-06-21T00:00:00.000Z", "data": {"text": "收到50%訂金"}},
+    ]
+    result = _extract_comments(actions)
+    assert result == "[2023-06-21] 收到50%訂金\n[2026-06-20] 後來的留言"
+
+def test_extract_comments_empty():
+    assert _extract_comments([]) == ""
 
 
 def test_parse_comment_order_date_roc_dots():
