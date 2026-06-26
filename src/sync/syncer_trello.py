@@ -19,6 +19,11 @@ def _auth(api_key: str, token: str) -> dict:
 
 def _fmt_trello_error(e: Exception) -> str:
     """將 Trello API 常見錯誤轉成易讀訊息；同時清除網址中的 key/token，避免外洩到畫面上。"""
+    if isinstance(e, requests.exceptions.Timeout):
+        return "連線逾時，請檢查網路連線後再試一次"
+    if isinstance(e, requests.exceptions.ConnectionError):
+        return "無法連線到 Trello，請檢查網路連線後再試一次"
+
     msg = re.sub(r'([?&](?:key|token)=)[^&\s]+', r'\1***', str(e))
     if "401" in msg or "invalid token" in msg.lower():
         return "Trello 憑證無效或已過期，請至「出貨一覽表」頁籤重新填入並儲存 API Key/Token"
@@ -26,7 +31,7 @@ def _fmt_trello_error(e: Exception) -> str:
         return "找不到看板或清單，請確認看板/清單名稱是否正確"
     if "429" in msg:
         return "Trello API 請求過於頻繁，請稍後再試"
-    return msg
+    return msg if len(msg) <= 200 else msg[:200] + "…"
 
 
 def _get_board_id(api_key: str, token: str, board_name: str) -> str:
@@ -243,8 +248,13 @@ def _resolve_order_date(
     list_id: str,
     api_key: str,
     token: str,
+    resolve_via_api: bool = True,
 ) -> tuple[str, date_type | None]:
-    """依序從描述、留言、附件、標題與移入清單日期決定下單日期。"""
+    """依序從描述、留言、附件、標題與移入清單日期決定下單日期。
+    resolve_via_api=False 時只用已批次抓到的資料判斷，跳過 _get_comment_order_date/
+    _get_move_to_list_date 這兩個會額外對每張卡片各打一次 API 的步驟（清單卡片數量很大、
+    或大多數卡片本來就沒有下單日期可言時，這兩步會讓整批抓取變得非常慢）。
+    """
     if desc_data["order_date_str"]:
         return desc_data["order_date_str"], desc_data["order_date_dt"]
 
@@ -252,9 +262,10 @@ def _resolve_order_date(
     if order_date:
         return order_date, order_dt
 
-    order_date, order_dt = _get_comment_order_date(card["id"], api_key, token)
-    if order_date:
-        return order_date, order_dt
+    if resolve_via_api:
+        order_date, order_dt = _get_comment_order_date(card["id"], api_key, token)
+        if order_date:
+            return order_date, order_dt
 
     order_date, order_dt = _parse_attachment_order_date(card.get("attachments") or [])
     if order_date:
@@ -268,9 +279,10 @@ def _resolve_order_date(
     if order_date:
         return order_date, order_dt
 
-    order_date, order_dt = _get_move_to_list_date(card["id"], list_id, api_key, token)
-    if order_date:
-        return order_date, order_dt
+    if resolve_via_api:
+        order_date, order_dt = _get_move_to_list_date(card["id"], list_id, api_key, token)
+        if order_date:
+            return order_date, order_dt
 
     ts = int(card["id"][:8], 16)
     dt = datetime.fromtimestamp(ts, tz=timezone.utc)
@@ -288,6 +300,7 @@ def _parse_desc(desc: str) -> dict:
     phone          = _find(r'電話[ \t]*[：:][ \t]*(.+)')
     fax            = _find(r'傳真[ \t]*[：:][ \t]*(.+)')
     address        = _find(r'地址[ \t]*[：:][ \t]*(.+)')
+    tax_id         = re.split(r'[（(]', _find(r'(?:統一編號|統編)[ \t]*[：:][ \t]*(.+)'))[0].strip()
     payment_raw    = _find(r'付款方式[ \t]*[：:][ \t]*(.+)')
     delivery       = _find(r'交期[ \t]*[：:][ \t]*(.+)')
     amount         = _find(r'應收總金額[ \t]*[：:][ \t]*(.+)')
@@ -310,6 +323,7 @@ def _parse_desc(desc: str) -> dict:
         "phone":          phone,
         "fax":            fax,
         "address":        address,
+        "tax_id":         tax_id,
         "payment_raw":    payment_raw,
         "payment_type":   payment_type,
         "delivery":       delivery,
@@ -379,8 +393,17 @@ def _parse_title(title: str) -> dict:
 
 def fetch_po_cards(api_key: str, token: str,
                    board_name: str = _BOARD_NAME,
-                   list_name:  str = _LIST_NAME) -> list[dict]:
-    """回傳指定看板/清單的所有卡片（已解析欄位）。"""
+                   list_name:  str = _LIST_NAME,
+                   limit: int = 100,
+                   resolve_order_date_via_api: bool = True) -> list[dict]:
+    """回傳指定看板/清單的卡片（已解析欄位），最多 limit 張（依 Trello 預設順序，越新越前面）。
+    清單卡片數量很大時，若不限制數量，Trello 會直接以 403 API_TOO_MANY_CARDS_REQUESTED 拒絕
+    （因為這個函式同時要求每張卡片的留言/移動紀錄），所以一律加上上限。
+
+    resolve_order_date_via_api=False 時，下單日期判斷不會額外對每張卡片各打 API（見
+    _resolve_order_date），速度快很多；適合卡片本來就不一定有「下單日期」可言的清單
+    （例如「已報價」這種還沒下單的卡片），代價是日期判斷準確度較低。
+    """
     board_id = _get_board_id(api_key, token, board_name)
     list_id  = _get_list_id(api_key, token, board_id, list_name)
 
@@ -390,11 +413,12 @@ def fetch_po_cards(api_key: str, token: str,
             **_auth(api_key, token),
             "fields": "id,name,due,shortUrl,desc,labels,attachments",
             "attachments": "true",
+            "limit": limit,
             "actions": "commentCard,updateCard:idList",
             "action_fields": "data,date,type",
             "action_limit": 100,
         },
-        timeout=15,
+        timeout=30,   # 帶 actions 的批次抓取較重，15 秒對大清單不夠用
     )
     resp.raise_for_status()
 
@@ -403,7 +427,9 @@ def fetch_po_cards(api_key: str, token: str,
         fields = _parse_title(card["name"])
         desc_data = _parse_desc(card.get("desc", ""))
 
-        order_date, order_dt = _resolve_order_date(card, desc_data, list_id, api_key, token)
+        order_date, order_dt = _resolve_order_date(
+            card, desc_data, list_id, api_key, token,
+            resolve_via_api=resolve_order_date_via_api)
 
         label_names = [lb.get("name", "") for lb in (card.get("labels") or [])]
         has_remodel = "Y" if any("改造" in n for n in label_names) else "N"
@@ -425,6 +451,7 @@ def fetch_po_cards(api_key: str, token: str,
             "phone":        desc_data["phone"],
             "fax":          desc_data["fax"],
             "address":      desc_data["address"],
+            "tax_id":       desc_data["tax_id"],
             "payment_raw":  desc_data["payment_raw"],
             "payment_type": desc_data["payment_type"],
             "delivery":     desc_data["delivery"],

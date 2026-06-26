@@ -968,52 +968,68 @@
     "category": "KGM"
   },
   {
-    "code": "KGX40-12",
-    "name": "KGX40-12踏舉式輕量型堆高機",
+    "code": "KGZ40-12",
+    "name": "KGZ40-12踏舉式輕量型堆高機",
     "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
     "unit": "台",
     "price": 16000,
-    "category": "KGX"
+    "category": "KGZ"
   },
   {
-    "code": "KGX-40-12DC",
-    "name": "KGX-40-12DC電動式輕量型堆高機",
+    "code": "KGZ-40-12DC",
+    "name": "KGZ-40-12DC電動式輕量型堆高機",
     "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
     "unit": "台",
     "price": 34000,
-    "category": "KGX"
+    "category": "KGZ"
   },
   {
-    "code": "KGX-40-15",
-    "name": "KGX-40-15踏舉式輕量型堆高機",
+    "code": "KGZ-40-15",
+    "name": "KGZ-40-15踏舉式輕量型堆高機",
     "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1500mm",
     "unit": "台",
-    "price": 17500,
-    "category": "KGX"
+    "price": 24500,
+    "category": "KGZ"
   },
   {
-    "code": "KGX-40-15DC",
-    "name": "KGX-40-15DC電動式輕量型堆高機",
+    "code": "KGZ-40-15DC",
+    "name": "KGZ-40-15DC電動式輕量型堆高機",
     "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
     "unit": "台",
-    "price": 35000,
-    "category": "KGX"
+    "price": 45500,
+    "category": "KGZ"
   },
   {
-    "code": "KGX-40-17",
-    "name": "KGX-40-17踏舉式輕量型堆高機",
+    "code": "KGZ-40-17",
+    "name": "KGZ-40-17踏舉式輕量型堆高機",
     "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1500mm",
     "unit": "台",
-    "price": 18500,
-    "category": "KGX"
+    "price": 25600,
+    "category": "KGZ"
   },
   {
-    "code": "KGX-40-17DC",
-    "name": "KGX-40-17DC電動式輕量型堆高機",
+    "code": "KGZ-40-17DC",
+    "name": "KGZ-40-17DC電動式輕量型堆高機",
     "spec": "載重：400KG｜牙叉最低高度：85mm｜牙叉最高高度：1200mm",
     "unit": "台",
-    "price": 36000,
-    "category": "KGX"
+    "price": 46800,
+    "category": "KGZ"
+  },
+  {
+    "code": "KGZ-40-13",
+    "name": "KGZ-40-13踏舉式輕量型堆高機",
+    "spec": "",
+    "unit": "台",
+    "price": 23500,
+    "category": "KGZ"
+  },
+  {
+    "code": "KGZ-40-13DC",
+    "name": "KGZ-40-13DC電動式輕量型堆高機",
+    "spec": "",
+    "unit": "台",
+    "price": 44500,
+    "category": "KGZ"
   },
   {
     "code": "LSCM340",

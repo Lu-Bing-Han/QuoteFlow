@@ -18,6 +18,42 @@ ITEM_ROW     = 10
 FOOTER_START = 11   # 附註列（insert 插入點，也是 footer 合併格的起始列）
 
 
+def trello_card_to_data(card: dict, location_lookup: dict | None = None) -> dict:
+    """將單張 Trello 卡片轉換成 generate() 需要的 data 結構（header + 單一品項）。
+    單價＝應收總金額÷數量，小計＝應收總金額（卡片上沒有單價欄位）。
+    """
+    from core.generator_statement import parse_amount, split_product_quantity
+
+    title_company = card.get("company", "")
+    company       = card.get("company_desc", "") or title_company
+    address = (
+        card.get("address", "")
+        or (location_lookup or {}).get(company, "")
+        or (location_lookup or {}).get(title_company, "")
+        or card.get("location", "")
+    )
+
+    amount = parse_amount(card.get("amount", ""))
+    product, quantity = split_product_quantity(card.get("product", ""), card.get("quantity", "") or "1")
+    qty_num    = float(quantity) if str(quantity).replace('.', '', 1).isdigit() else 1
+    unit_price = amount / qty_num if qty_num else 0
+
+    return {
+        "header": {
+            "customer": company,
+            "phone":    card.get("phone", ""),
+            "contact":  card.get("contact", ""),
+            "address":  address,
+            "tax_id":   card.get("tax_id", ""),
+            "quote_no": "",
+        },
+        "items": [{
+            "seq": 1, "name": product, "qty": quantity, "unit": "",
+            "unit_price": unit_price, "subtotal": amount, "part_no": "",
+        }],
+    }
+
+
 def _load_series_lookup() -> dict:
     """掃描 template_series.xlsx 所有分頁，建立 品號(B欄) → 品名/規格(C欄) 對照表。"""
     lookup = {}
