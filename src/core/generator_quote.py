@@ -423,6 +423,8 @@ PRODUCT_ROWS: dict[str, tuple[str, int, int]] = {
     "KGZ-40-15DC": ("KGZ",  31,  40),  # 10 行
     "KGZ-40-17": ("KGZ",  42,  49),  # 8 行
     "KGZ-40-17DC": ("KGZ",  51,  60),  # 10 行
+    "KGZ-40-13": ("KGZ",  62,  69),  # 8 行
+    "KGZ-40-13DC": ("KGZ",  71,  80),  # 10 行
     # ── LSCM（Sheet: LSCM）
     "LSCM340": ("LSCM",   2,  12),  # 11 行
     "LSCM520": ("LSCM",  14,  25),  # 12 行

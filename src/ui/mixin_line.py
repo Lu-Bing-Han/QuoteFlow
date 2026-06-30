@@ -1032,15 +1032,6 @@ class _LineTab:
                 )
                 return
 
-            from core.db import get_connection
-            conn = get_connection()
-            try:
-                row = dict(conn.execute(
-                    "SELECT * FROM line_inquiries WHERE id=?", (inquiry_id,)
-                ).fetchone())
-            finally:
-                conn.close()
-
             op_name = op_var.get()
             op_code = op_codes.get(op_name, op_name[:1].upper() if op_name else "")
             company  = _field_vars["company_name"].get().strip()
@@ -1063,8 +1054,14 @@ class _LineTab:
                 f"FAX: {_field_vars['fax'].get()}\n"
                 f"地址: {_field_vars['address'].get()}\n"
                 f"Mail: {_field_vars['email'].get()}\n"
-                f"客戶詢價來源: LINE官方帳號\n\n"
-                f"原始訊息：\n{row['message']}"
+                f"客戶詢價來源: LINE官方帳號\n"
+                f"需求:\n"
+                f"------\n"
+                f"付款方式:\n"
+                f"發票:\n"
+                f"標籤:\n"
+                f"交期:\n"
+                f"應收總金額:"
             )
 
             status_bar.configure(text="⏳  正在建立 Trello 卡片…", text_color="#e67e22")
