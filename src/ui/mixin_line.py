@@ -1056,7 +1056,6 @@ class _LineTab:
                 f"Mail: {_field_vars['email'].get()}\n"
                 f"客戶詢價來源: LINE官方帳號\n"
                 f"需求:\n"
-                f"------\n"
                 f"付款方式:\n"
                 f"發票:\n"
                 f"標籤:\n"

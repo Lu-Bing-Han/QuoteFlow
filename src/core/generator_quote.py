@@ -265,15 +265,57 @@ def generate_quote(
 # ── 產品目錄 ────────────────────────────────────────────────────
 
 
+def _cost_price_lookup(template_dir: Path) -> dict[str, float]:
+    """Read template_cost.xlsx → {normalized_code: suggested_retail_price}.
+    Normalized: upper-cased, hyphens/spaces/parens stripped.
+    First occurrence wins so main product sheets take priority over history sheets.
+    Only values >= 1000 are treated as prices (filters out row numbers / ratios)."""
+    _CJK = re.compile(r"[一-鿿㐀-䶿＀-￯]")
+    _norm = lambda s: re.sub(r"[-\s()]", "", s).upper()
+    path = template_dir / "template_cost.xlsx"
+    if not path.exists():
+        return {}
+    lookup: dict[str, float] = {}
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True)
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=True):
+                model = price = None
+                for val in row:
+                    if model is None and isinstance(val, str):
+                        s = val.strip()
+                        if s and not _CJK.search(s) and 3 <= len(s) <= 30:
+                            model = s
+                    if price is None and isinstance(val, (int, float)) and val >= 1000:
+                        price = float(val)
+                if model and price is not None:
+                    key = _norm(model)
+                    if key not in lookup:
+                        lookup[key] = price
+    except Exception:
+        pass
+    return lookup
+
+
 def load_product_catalog(template_dir: Path) -> list[dict]:
-    """從 template_dir/products.json 載入產品目錄，找不到回傳空清單。"""
+    """從 template_dir/products.json 載入產品目錄，找不到回傳空清單。
+    價格以 template_cost.xlsx 建議售價為準，找不到對應品號時保留 products.json 原價。"""
     path = template_dir / "products.json"
     if not path.exists():
         return []
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        products = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return []
+    _norm = lambda s: re.sub(r"[-\s()]", "", s).upper()
+    cost = _cost_price_lookup(template_dir)
+    if cost:
+        for p in products:
+            key = _norm(p.get("code", ""))
+            price = cost.get(key) or cost.get(key.replace("KGZ", "KGX"))
+            if price is not None:
+                p["price"] = int(price)
+    return products
 
 
 # ── 品號列範圍對照表 ─────────────────────────────────────────────
