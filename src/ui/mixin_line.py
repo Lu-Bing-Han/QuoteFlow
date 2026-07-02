@@ -951,21 +951,26 @@ class _LineTab:
             status_bar.configure(text="✔  已從所有訊息合併欄位資料", text_color="#1e8449")
 
         def _on_reextract():
-            """把該顧客所有訊息（含我方回覆）串接，重新送 Gemini 辨識，結果填入表單。"""
+            """重新送 Gemini 辨識：圖片訊息呼叫圖片端點，文字訊息合併後送文字端點。"""
             msgs = _get_all_user_msgs()
             if not msgs:
                 return
             _ensure_selected_target(msgs)
-            lines = []
+
+            # 分離圖片訊息 ID 與一般文字
+            img_ids = [m["id"] for m in msgs
+                       if m.get("message", "").strip() == "（顧客傳送了圖片）"]
+            text_lines = []
             for m in msgs:
-                text = (m.get("message") or "").strip()
-                if not text:
+                txt = (m.get("message") or "").strip()
+                if not txt or txt == "（顧客傳送了圖片）":
                     continue
                 prefix = "我方" if m.get("sender") == "staff" else "顧客"
-                lines.append(f"{prefix}：{text}")
-            combined = "\n".join(lines)
-            if not combined.strip():
-                status_bar.configure(text="⚠  無可辨識的訊息文字", text_color="#e67e22")
+                text_lines.append(f"{prefix}：{txt}")
+            combined = "\n".join(text_lines)
+
+            if not img_ids and not combined.strip():
+                status_bar.configure(text="⚠  無可辨識的訊息", text_color="#e67e22")
                 return
 
             srv_cfg = self._config.get("line_server", {})
@@ -979,20 +984,32 @@ class _LineTab:
             def _do_extract():
                 try:
                     import requests as _req
-                    if url:
-                        # 透過 Railway server 的 Gemini API
-                        resp = _req.post(
+                    if not url:
+                        raise RuntimeError("未設定伺服器網址")
+                    headers = {"X-API-Secret": secret, "Content-Type": "application/json"}
+                    merged: dict = {}
+                    # 圖片辨識（每張圖片依序辨識，結果合併）
+                    for img_id in img_ids:
+                        r = _req.post(
+                            f"{url}/api/inquiries/{img_id}/rerecognize_image",
+                            headers=headers, timeout=45,
+                        )
+                        if r.ok:
+                            for k, v in r.json().items():
+                                if v and not merged.get(k):
+                                    merged[k] = v
+                    # 文字辨識
+                    if combined.strip():
+                        r = _req.post(
                             f"{url}/api/extract_text",
                             json={"message": combined},
-                            headers={"X-API-Secret": secret,
-                                     "Content-Type": "application/json"},
-                            timeout=30,
+                            headers=headers, timeout=30,
                         )
-                        resp.raise_for_status()
-                        info = resp.json()
-                    else:
-                        raise RuntimeError("未設定伺服器網址")
-                    self.after(0, lambda i=info: _on_extract_done(i))
+                        r.raise_for_status()
+                        for k, v in r.json().items():
+                            if v and not merged.get(k):
+                                merged[k] = v
+                    self.after(0, lambda i=merged: _on_extract_done(i))
                 except Exception as e:
                     self.after(0, lambda err=e: _on_extract_error(err))
 

@@ -113,6 +113,7 @@ def _init_db():
         ("inquiry_product", "TEXT DEFAULT ''"),
         ("area",            "TEXT DEFAULT ''"),
         ("sender",          "TEXT DEFAULT 'customer'"),
+        ("image_b64",       "TEXT DEFAULT NULL"),
     ]
     for col, typedef in new_cols:
         try:
@@ -352,13 +353,18 @@ def webhook():
         user_id      = event["source"]["userId"]
         display_name = _get_display_name(user_id)
 
+        image_b64 = None
         if msg_type == "text":
             text = msg["text"]
             info = _extract_info(text)
         elif msg_type == "image":
             image_bytes = _download_image(msg["id"])
             text        = "（顧客傳送了圖片）"
-            info        = _extract_info_from_image(image_bytes) if image_bytes else dict(_EMPTY_INFO)
+            if image_bytes:
+                image_b64 = base64.b64encode(image_bytes).decode()
+                info      = _extract_info_from_image(image_bytes)
+            else:
+                info = dict(_EMPTY_INFO)
         else:
             continue
 
@@ -370,13 +376,13 @@ def webhook():
                 (line_user_id, display_name, message,
                  company_name, tax_id, contact_name, mobile, phone,
                  fax, address, email, inquiry_product, area,
-                 created_at, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 image_b64, created_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (user_id, display_name, text,
               info["company_name"], info["tax_id"], info["contact_name"],
               info["mobile"], info["phone"], info["fax"],
               info["address"], info["email"], info["inquiry_product"], info["area"],
-              now, now))
+              image_b64, now, now))
         conn.commit()
         cur.close()
         conn.close()
@@ -512,6 +518,37 @@ def merge_by_name():
     cur.close()
     conn.close()
     return jsonify({"ok": True, "merged": merged, "canonical": canonical})
+
+
+@app.route("/api/inquiries/<int:inquiry_id>/rerecognize_image", methods=["POST"])
+def rerecognize_image(inquiry_id: int):
+    _auth()
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute("SELECT image_b64 FROM line_inquiries WHERE id=%s", (inquiry_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row or not row["image_b64"]:
+        return jsonify({"error": "no image stored"}), 404
+    image_bytes = base64.b64decode(row["image_b64"])
+    info = _extract_info_from_image(image_bytes)
+    # 把辨識結果寫回 DB
+    conn = _conn()
+    cur  = conn.cursor()
+    cur.execute("""
+        UPDATE line_inquiries SET
+            company_name=%s, tax_id=%s, contact_name=%s, mobile=%s,
+            phone=%s, fax=%s, address=%s, email=%s, inquiry_product=%s, area=%s,
+            updated_at=%s
+        WHERE id=%s
+    """, (info["company_name"], info["tax_id"], info["contact_name"], info["mobile"],
+          info["phone"], info["fax"], info["address"], info["email"],
+          info["inquiry_product"], info["area"], _now_tw(), inquiry_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify(info)
 
 
 @app.route("/api/extract_text", methods=["POST"])
