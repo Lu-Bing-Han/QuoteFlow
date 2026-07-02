@@ -1073,7 +1073,7 @@ class _QuoteTab:
 
         def _generate():
             from core.generator_quote import generate_quote_from_cart, generate_blank_quote
-            if not _customer.get("company"):
+            if not (_customer.get("company") or _customer.get("contact")):
                 messagebox.showwarning("無客戶資料", "請先在步驟①選取 Trello 卡片", parent=parent); return
 
             _blank_type_map = {
